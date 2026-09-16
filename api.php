@@ -12,21 +12,79 @@ try {
 
 $action = $_GET['action'] ?? '';
 
+if ($action === 'get_ip') {
+    echo json_encode(['ip' => $_SERVER['REMOTE_ADDR'] ?? 'Bilinmiyor']);
+    exit;
+}
+
 if ($action === 'login') {
     $raw = file_get_contents('php://input');
     $payload = json_decode($raw, true) ?: [];
     $pass = trim($payload['password'] ?? '');
+    $remember = !empty($payload['remember']);
 
     if ($pass === '!Eymen2017.') {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
         $_SESSION['cv_auth_success'] = true;
-        setcookie('cv_auth_success', 'true', time() + 315360000, '/', '', false, false);
-        echo json_encode(['success' => true, 'message' => 'Giriş başarılı']);
+        if ($remember) {
+            setcookie('cv_auth_success', 'true', time() + 315360000, '/', '', false, false);
+        } else {
+            setcookie('cv_auth_success', 'true', 0, '/', '', false, false);
+        }
+        echo json_encode([
+            'success' => true,
+            'message' => 'Giriş başarılı',
+            'client_ip' => $_SERVER['REMOTE_ADDR'] ?? ''
+        ]);
     } else {
-        echo json_encode(['success' => false, 'error' => 'Hatalı şifre!']);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Hatalı şifre!',
+            'client_ip' => $_SERVER['REMOTE_ADDR'] ?? ''
+        ]);
     }
+    exit;
+}
+
+if ($action === 'discord_auth') {
+    $raw = file_get_contents('php://input');
+    $payload = json_decode($raw, true) ?: [];
+    $remember = !empty($payload['remember']);
+
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $_SESSION['cv_auth_success'] = true;
+    if ($remember) {
+        setcookie('cv_auth_success', 'true', time() + 315360000, '/', '', false, false);
+    } else {
+        setcookie('cv_auth_success', 'true', 0, '/', '', false, false);
+    }
+    echo json_encode([
+        'success' => true,
+        'message' => 'Discord ile doğrulama başarılı',
+        'client_ip' => $_SERVER['REMOTE_ADDR'] ?? ''
+    ]);
+    exit;
+}
+
+if ($action === 'logout') {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $_SESSION = [];
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
+    session_destroy();
+    setcookie('cv_auth_success', '', time() - 3600, '/', '', false, false);
+    echo json_encode(['success' => true, 'message' => 'Oturum başarıyla kapatıldı']);
     exit;
 }
 

@@ -1514,6 +1514,26 @@ document.addEventListener('DOMContentLoaded', () => {
             showModal('backup-modal');
         };
 
+        window.performLogout = async () => {
+            if (!confirm('Oturumu kapatmak istediğinize emin misiniz?\n\nYeniden giriş yapmak için şifre veya Discord 2FA kodu gerekecek.')) return;
+
+            try {
+                await fetch('api.php?action=logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch(e) {}
+
+            // Clear all local auth state
+            localStorage.removeItem('cv_auth_success');
+            localStorage.removeItem('cv_remember_me');
+            sessionStorage.removeItem('cv_auth_success');
+            document.cookie = 'cv_auth_success=; max-age=0; path=/; SameSite=Lax';
+
+            window.showToast('Güvenli çıkış yapıldı. Yönlendiriliyorsunuz...', 'fa-solid fa-right-from-bracket');
+            setTimeout(() => { location.reload(); }, 1200);
+        };
+
         if ($('backup-toggle')) $('backup-toggle').addEventListener('click', window.showBackupModal);
         if ($('backup-pub-btn')) $('backup-pub-btn').addEventListener('click', window.showBackupModal);
         if ($('close-backup-modal')) $('close-backup-modal').addEventListener('click', hideModal);
