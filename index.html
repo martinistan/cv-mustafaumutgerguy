@@ -31,11 +31,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
-    <script src="assets/icons_data.js"></script>
-    <script src="config/config.js"></script>
-    <script src="config/users/boekhoudkundigassistent.js"></script>
-    <script src="config/users/student.js"></script>
+    <link rel="stylesheet" href="style.css?v=2.6">
+    <script src="assets/icons_data.js?v=2.6"></script>
+    <script src="config/config.js?v=2.6"></script>
+    <script src="config/users/boekhoudkundigassistent.js?v=2.6"></script>
+    <script src="config/users/student.js?v=2.6"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
@@ -43,34 +43,143 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="node_modules/docx/dist/index.iife.js"></script>
 </head>
-<body>
+<body style="margin: 0; padding: 0; background: #0c0d0e;">
 
-<div id="login-screen" class="login-screen-overlay no-print">
-    <div class="login-card">
-        <div class="login-badge-icon">
+<div id="login-screen" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: radial-gradient(circle at 50% 30%, #1c1d22 0%, #0a0a0c 100%); z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; user-select: none;">
+    <div style="background: rgba(26, 27, 31, 0.9); border: 1px solid rgba(197, 168, 128, 0.35); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 38px 30px; border-radius: 20px; width: 340px; max-width: calc(100vw - 36px); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7), 0 0 50px rgba(197, 168, 128, 0.12); text-align: center; box-sizing: border-box;">
+        
+        <div style="width: 56px; height: 56px; margin: 0 auto 16px; background: linear-gradient(135deg, rgba(197, 168, 128, 0.25), rgba(197, 168, 128, 0.05)); border: 1px solid rgba(197, 168, 128, 0.5); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #c5a880; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);">
             <i class="fa-solid fa-shield-halved"></i>
         </div>
-        <h2 class="login-title">SECURE ACCESS</h2>
-        <p class="login-subtitle">CV KONTROL PANELİ</p>
-        <form id="login-form" onsubmit="return false;">
-            <div class="login-field">
-                <label for="login-password">Giriş Şifresi</label>
-                <div class="login-input-wrap">
-                    <i class="fa-solid fa-lock input-icon"></i>
-                    <input type="password" id="login-password" placeholder="Şifrenizi girin..." autocomplete="current-password" />
-                    <button type="button" id="toggle-password-visibility" class="toggle-pass-btn" tabindex="-1">
+
+        <h2 style="margin: 0 0 4px; font-size: 22px; font-weight: 800; background: linear-gradient(135deg, #f5e4cb, #c5a880 50%, #9e7f58); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 0.5px;">SECURE ACCESS</h2>
+        
+        <p style="margin: 0 0 24px; color: rgba(255, 255, 255, 0.45); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">CV KONTROL PANELİ</p>
+
+        <form id="login-form" onsubmit="return false;" style="margin: 0; padding: 0;">
+            <div style="text-align: left; margin-bottom: 20px;">
+                <label for="login-password" style="display: block; color: rgba(255, 255, 255, 0.75); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Giriş Şifresi</label>
+                <div style="position: relative; display: flex; align-items: center; width: 100%; box-sizing: border-box;">
+                    <i class="fa-solid fa-lock" style="position: absolute; left: 14px; font-size: 14px; color: rgba(197, 168, 128, 0.75); pointer-events: none;"></i>
+                    <input type="password" id="login-password" placeholder="Şifrenizi girin..." autocomplete="current-password" autofocus style="width: 100%; box-sizing: border-box; background: rgba(10, 10, 12, 0.75); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 13px 44px 13px 40px; color: #ffffff; font-size: 14px; font-family: inherit; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#c5a880'; this.style.boxShadow='0 0 0 3px rgba(197, 168, 128, 0.25)';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.boxShadow='none';" />
+                    <button type="button" id="toggle-password-visibility" tabindex="-1" style="position: absolute; right: 10px; background: none; border: none; color: rgba(255, 255, 255, 0.5); cursor: pointer; font-size: 14px; padding: 6px; display: flex; align-items: center; justify-content: center; outline: none;">
                         <i class="fa-solid fa-eye" id="pass-eye-icon"></i>
                     </button>
                 </div>
             </div>
-            <button type="button" id="login-btn" class="login-submit-btn">
+
+            <button type="button" id="login-btn" style="width: 100%; background: linear-gradient(135deg, #e0c7a5, #c5a880 60%, #ab895c); color: #0c0d0e; border: none; padding: 13px 18px; border-radius: 12px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 8px 24px rgba(197, 168, 128, 0.35); transition: all 0.2s; outline: none; font-family: inherit;">
                 <span>Giriş Yap</span>
                 <i class="fa-solid fa-arrow-right"></i>
             </button>
-            <div id="login-error" class="login-error-msg"></div>
+
+            <div id="login-error" style="color: #f87171; font-size: 11.5px; font-weight: 700; margin-top: 14px; min-height: 18px; opacity: 0; transition: opacity 0.2s;"></div>
         </form>
     </div>
 </div>
+
+<script>
+(function() {
+    var p = new URLSearchParams(window.location.search);
+    var isHeadless = p.get('headless') === '1';
+    var isAuth = localStorage.getItem('cv_auth_success') === 'true' || 
+                 sessionStorage.getItem('cv_auth_success') === 'true' || 
+                 document.cookie.includes('cv_auth_success=true');
+
+    function unlockApp() {
+        var ls = document.getElementById('login-screen');
+        if (ls) ls.style.display = 'none';
+        var app = document.getElementById('app-wrapper');
+        if (app) app.style.display = 'block';
+    }
+
+    if (isAuth || isHeadless) {
+        unlockApp();
+    } else {
+        var app = document.getElementById('app-wrapper');
+        if (app) app.style.display = 'none';
+
+        function setupLogin() {
+            var btn = document.getElementById('login-btn');
+            var passInput = document.getElementById('login-password');
+            var err = document.getElementById('login-error');
+            var toggleBtn = document.getElementById('toggle-password-visibility');
+            var eyeIcon = document.getElementById('pass-eye-icon');
+
+            if (toggleBtn && passInput) {
+                toggleBtn.onclick = function() {
+                    if (passInput.type === 'password') {
+                        passInput.type = 'text';
+                        if (eyeIcon) eyeIcon.className = 'fa-solid fa-eye-slash';
+                    } else {
+                        passInput.type = 'password';
+                        if (eyeIcon) eyeIcon.className = 'fa-solid fa-eye';
+                    }
+                };
+            }
+
+            async function performLogin() {
+                var val = passInput ? passInput.value.trim() : '';
+                var isOk = (val === '!Eymen2017.');
+
+                if (!isOk) {
+                    try {
+                        var res = await fetch('api.php?action=login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: val })
+                        });
+                        var json = await res.json();
+                        if (json && json.success) isOk = true;
+                    } catch(e) {}
+                }
+
+                if (isOk) {
+                    localStorage.setItem('cv_auth_success', 'true');
+                    sessionStorage.setItem('cv_auth_success', 'true');
+                    document.cookie = "cv_auth_success=true; max-age=315360000; path=/; SameSite=Lax";
+                    unlockApp();
+                    try {
+                        fetch('api.php?action=login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: val })
+                        }).catch(function(){});
+                    } catch(e) {}
+                    location.reload();
+                } else {
+                    if (err) {
+                        err.textContent = 'Hatalı şifre!';
+                        err.style.opacity = '1';
+                        setTimeout(function() { if (err) err.style.opacity = '0'; }, 3000);
+                    }
+                    if (passInput) {
+                        passInput.focus();
+                        passInput.select();
+                    }
+                }
+            }
+
+            if (btn) btn.onclick = performLogin;
+            if (passInput) {
+                passInput.onkeydown = function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        performLogin();
+                    }
+                };
+                setTimeout(function() { passInput.focus(); }, 120);
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupLogin);
+        } else {
+            setupLogin();
+        }
+    }
+})();
+</script>
 
 <div id="app-tooltip" class="app-tooltip no-print">Tooltip</div>
 <div id="app-wrapper" style="display: none;">
@@ -398,7 +507,7 @@
 </div>
 </div>
 
-<script src="script.js"></script>
+<script src="script.js?v=2.6"></script>
 
 </body>
 </html>
