@@ -29,8 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let draftData = JSON.parse(localStorage.getItem('cv_profiles_draft'));
 
         Object.keys(baseProfiles).forEach(k => { 
-            liveData[k] = baseProfiles[k]; 
-            if (draftData) draftData[k] = JSON.parse(JSON.stringify(baseProfiles[k]));
+            if (!liveData[k]) liveData[k] = JSON.parse(JSON.stringify(baseProfiles[k])); 
+            if (draftData && !draftData[k]) draftData[k] = JSON.parse(JSON.stringify(baseProfiles[k]));
         });
 
         if (!draftData) { 
@@ -42,6 +42,28 @@ document.addEventListener('DOMContentLoaded', () => {
         let showHidden = localStorage.getItem('cv_show_hidden') === 'true';
         let profileData = editMode ? draftData : liveData;
         
+        const syncFromMySQL = async () => {
+            try {
+                const res = await fetch('api.php?action=get_data');
+                const json = await res.json();
+                if (json && json.success && json.data && Object.keys(json.data).length > 0) {
+                    let updated = false;
+                    Object.keys(json.data).forEach(k => {
+                        liveData[k] = json.data[k];
+                        updated = true;
+                    });
+                    if (updated) {
+                        localStorage.setItem('cv_profiles', JSON.stringify(liveData));
+                        if (!editMode) {
+                            profileData = liveData;
+                            renderCV();
+                        }
+                    }
+                }
+            } catch(e) {}
+        };
+        syncFromMySQL();
+
         if (!profileData[activeKey]) activeKey = Object.keys(profileData).find(k => k !== 'umut') || 'boekhoudkundigassistent';
 
         const getDisplayName = (key) => {
@@ -89,8 +111,76 @@ document.addEventListener('DOMContentLoaded', () => {
         window.appUndo=()=>{if(historyPointer>0){isUndoingRedoing=true;historyPointer--;profileData=JSON.parse(historyStack[historyPointer]);syncCurrentStateToStorage();renderCV();updateHistoryUI();isUndoingRedoing=false;}};
         window.appRedo=()=>{if(historyPointer<historyStack.length-1){isUndoingRedoing=true;historyPointer++;profileData=JSON.parse(historyStack[historyPointer]);syncCurrentStateToStorage();renderCV();updateHistoryUI();isUndoingRedoing=false;}};
         
-        window.publishEdits=()=>{if(confirm('Taslak yayınlansın mı?')){liveData=JSON.parse(JSON.stringify(draftData));localStorage.setItem('cv_profiles',JSON.stringify(liveData));alert('Yayınlandı! 🚀');}};
-        window.revertDraft=()=>{if(confirm('Geri dönsün mü?')){draftData=JSON.parse(JSON.stringify(liveData));localStorage.setItem('cv_profiles_draft',JSON.stringify(draftData));profileData=draftData;initHistory();renderCV();}};
+        window.showToast = (msg, icon = 'fa-solid fa-check') => {
+            let t = document.getElementById('cv-toast');
+            if (!t) {
+                t = document.createElement('div');
+                t.id = 'cv-toast';
+                t.className = 'cv-toast';
+                document.body.appendChild(t);
+            }
+            t.innerHTML = `<i class="${icon}"></i> <span>${msg}</span>`;
+            t.classList.add('show');
+            clearTimeout(window.cvToastTimer);
+            window.cvToastTimer = setTimeout(() => {
+                t.classList.remove('show');
+            }, 3500);
+        };
+
+        window.publishEdits = async () => {
+            if (!confirm('Tüm değişiklikler MySQL veritabanına ve canlı siteye kaydedilip yayınlansın mı?')) return;
+            
+            const btn = $('publish-btn');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Kaydediliyor...</span>';
+            }
+
+            liveData = JSON.parse(JSON.stringify(draftData));
+            localStorage.setItem('cv_profiles', JSON.stringify(liveData));
+
+            try {
+                const res = await fetch('api.php?action=save_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profiles: liveData })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    window.showToast('Değişiklikler MySQL ve canlı siteye kaydedildi! 🚀', 'fa-solid fa-cloud-arrow-up');
+                } else {
+                    window.showToast('MySQL Uyarısı: ' + (data.error || 'Kaydedilemedi'), 'fa-solid fa-triangle-exclamation');
+                }
+            } catch(err) {
+                window.showToast('Yerel kaydedildi (Sunucuya ulaşılamadı)', 'fa-solid fa-floppy-disk');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+                editMode = false;
+                localStorage.setItem('cv_edit_mode', 'false');
+                profileData = liveData;
+                initHistory();
+                updateEditUI();
+                renderCV();
+            }
+        };
+
+        window.revertDraft = () => {
+            if (confirm('Taslaktaki değişiklikler silinsin ve canlı sürüme dönülsün mü?')) {
+                draftData = JSON.parse(JSON.stringify(liveData));
+                localStorage.setItem('cv_profiles_draft', JSON.stringify(draftData));
+                profileData = liveData;
+                editMode = false;
+                localStorage.setItem('cv_edit_mode', 'false');
+                initHistory();
+                updateEditUI();
+                renderCV();
+                window.showToast('Canlı sürüme dönüldü.', 'fa-solid fa-rotate-left');
+            }
+        };
         
         window.addNewProfile = () => {
             const name = prompt("Yeni profil adı (Örn: ahmet):");
@@ -158,7 +248,16 @@ document.addEventListener('DOMContentLoaded', () => {
             sec.appendChild(actions);
         };
 
-        const renderSectionTitle=(cfg,id,icon)=>{const t=$(id+'-title');if(!t)return;if(!cfg.title){t.style.display='none';return;}t.style.display='flex';t.innerHTML=`<i class="fa-solid ${icon}"></i> <span data-path="${id.replace('-sec','')}.title">${cfg.title}</span>`;};
+        const renderSectionTitle = (cfg, id, defaultIcon) => {
+            const t = $(id + '-title');
+            if (!t) return;
+            if (!cfg.title) { t.style.display = 'none'; return; }
+            t.style.display = 'flex';
+            const iconCls = cfg.icon || (defaultIcon.startsWith('fa-') ? 'fa-solid ' + defaultIcon : defaultIcon);
+            const secKey = id.replace('-sec', '');
+            const editAttr = editMode ? `data-icon-path="${secKey}.icon" title="İkonu Değiştirmek İçin Tıklayın"` : '';
+            t.innerHTML = `<i class="${iconCls}" ${editAttr}></i> <span data-path="${secKey}.title">${cfg.title}</span>`;
+        };
 
         const renderCV=()=>{
             const C=profileData[activeKey];if(!C)return;
@@ -302,7 +401,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     mobCfg.items.forEach((item, idx) => {
                         const el = document.createElement('div');
                         el.className = 'sidebar-mobility-col';
-                        const iconMarkup = item.svg ? item.svg : `<i class="${item.icon || 'fa-solid fa-circle-check'}"></i>`;
+                        const mobIconCls = item.icon || 'fa-solid fa-circle-check';
+                        const mobEditAttr = editMode ? `data-icon-path="mobility.items.${idx}.icon" title="İkonu Değiştir"` : '';
+                        const iconMarkup = item.svg ? `<div class="mob-svg-wrap" ${mobEditAttr}>${item.svg}</div>` : `<i class="${mobIconCls}" ${mobEditAttr}></i>`;
                         el.innerHTML = `
                             ${iconMarkup}
                             <span class="sidebar-mobility-name" ${editMode ? `data-path="mobility.items.${idx}.name"` : ''}>${item.name}</span>
@@ -327,8 +428,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     intCfg.items.forEach((item, idx) => {
                         const el = document.createElement('div');
                         el.className = 'sidebar-interest-col';
+                        const intEditAttr = editMode ? `data-icon-path="interests.items.${idx}.icon" title="İkonu Değiştir"` : '';
                         el.innerHTML = `
-                            <i class="${item.icon || 'fa-solid fa-star'}"></i>
+                            <i class="${item.icon || 'fa-solid fa-star'}" ${intEditAttr}></i>
                             <span class="sidebar-interest-name" ${editMode ? `data-path="interests.items.${idx}.name"` : ''}>${item.name}</span>
                         `;
                         intList.appendChild(el);
@@ -480,7 +582,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const wiTitle=$('waarom-ik-title');
                 if(wiTitle){
                     wiTitle.style.display='flex';
-                    wiTitle.innerHTML=`<i class="fa-solid fa-circle-question"></i> <span data-path="waaromIk.title">${C.waaromIk.title||'WAAROM IK?'}</span>`;
+                    const wiIcon = C.waaromIk.icon || 'fa-solid fa-circle-question';
+                    const wiEditAttr = editMode ? 'data-icon-path="waaromIk.icon" title="İkonu Değiştir"' : '';
+                    wiTitle.innerHTML=`<i class="${wiIcon}" ${wiEditAttr}></i> <span data-path="waaromIk.title">${C.waaromIk.title||'WAAROM IK?'}</span>`;
                 }
                 const wiGrid=$('waarom-ik-grid');
                 if(wiGrid && C.waaromIk.items){
@@ -488,8 +592,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     C.waaromIk.items.forEach((item,idx)=>{
                         const el=document.createElement('div');
                         el.className='why-me-item';
+                        const itemEditAttr = editMode ? `data-icon-path="waaromIk.items.${idx}.icon" title="İkonu Değiştir"` : '';
                         el.innerHTML=`
-                            <div class="why-me-icon-circle">
+                            <div class="why-me-icon-circle" ${itemEditAttr}>
                                 <i class="${item.icon}"></i>
                             </div>
                             <span class="why-me-label" data-path="waaromIk.items.${idx}.title">${item.title}</span>
@@ -574,25 +679,125 @@ document.addEventListener('DOMContentLoaded', () => {
 
         window.addEventListener('load', () => { zoom = 1.0; panX = 0; panY = 0; updateTransform(); });
         
-        let lastClickTime = 0;
-        document.addEventListener('mousedown',(e)=>{
-            const now = Date.now();
-            const isDoubleClick = (now - lastClickTime < 300);
-            lastClickTime = now;
-            if(e.button===1 || (e.ctrlKey&&e.button===0) || isDoubleClick){
-                if(e.target.closest('[data-path]') && !isDoubleClick) return;
-                isDragging=true; dragStart={x:e.clientX-panX,y:e.clientY-panY};
-                layer.style.cursor='grabbing'; if(isDoubleClick) e.preventDefault();
+        let clickCount = 0;
+        let clickTimer = null;
+        let lastClickTarget = null;
+
+        document.addEventListener('mousedown', (e) => {
+            // UI elements should not trigger canvas drag or icon picking
+            if (e.target.closest('#actions-container, #publish-controls, .custom-modal-overlay, #login-screen, button, input, textarea, select, .action-btn, .pub-btn, .modal-btn')) {
+                return;
+            }
+
+            // Middle click or Ctrl+Left click always starts dragging/panning
+            if (e.button === 1 || (e.ctrlKey && e.button === 0)) {
+                isDragging = true;
+                dragStart = { x: e.clientX - panX, y: e.clientY - panY };
+                layer.style.cursor = 'grabbing';
+                e.preventDefault();
+                return;
+            }
+
+            if (e.button !== 0) return;
+
+            // Check if clicking an icon in edit mode
+            if (editMode && e.target.closest('[data-icon-path]')) {
+                const iconEl = e.target.closest('[data-icon-path]');
+                const path = iconEl.getAttribute('data-icon-path');
+                const curCls = iconEl.className || '';
+                window.showIconPicker(path, curCls);
+                e.preventDefault();
+                return;
+            }
+
+            // Detect if clicked on a text / copyable / editable area
+            const isTextEl = !!e.target.closest('[data-path], [contenteditable], p, span, h1, h2, h3, h4, .editable-content, .edu-desc, .experience-address, .mot-body, .sb-body, .why-me-label, .skill-name, .lang-name, .contact-value, .contact-label, .edu-school, .edu-year');
+
+            const nowTarget = isTextEl ? (e.target.closest('[data-path]') || e.target) : e.target;
+            if (lastClickTarget === nowTarget) {
+                clickCount++;
+            } else {
+                clickCount = 1;
+                lastClickTarget = nowTarget;
+            }
+
+            clearTimeout(clickTimer);
+            clickTimer = setTimeout(() => {
+                clickCount = 0;
+                lastClickTarget = null;
+            }, 450);
+
+            // Rule 3: 3 tıklama = metin üstündeyken bile CV hareket ettirme
+            if (clickCount >= 3) {
+                isDragging = true;
+                dragStart = { x: e.clientX - panX, y: e.clientY - panY };
+                layer.style.cursor = 'grabbing';
+                e.preventDefault();
+                return;
+            }
+
+            // Rule 1 & 2: Çift tıklama
+            if (clickCount === 2) {
+                if (!isTextEl) {
+                    // Boş yerlere çift tıklamak CV'yi hareket ettirir (pan modu)
+                    isDragging = true;
+                    dragStart = { x: e.clientX - panX, y: e.clientY - panY };
+                    layer.style.cursor = 'grabbing';
+                    e.preventDefault();
+                } else {
+                    // Metin üstüne çift tıklamak CV'yi ASLA hareket ettirmez!
+                    isDragging = false;
+                    // edit kapalıyken: normal metin seçimi (tarayıcı doğal davranışı, preventDefault yok)
+                    // edit modundayken: dblclick listener metni contentEditable yapacak
+                }
+                return;
+            }
+
+            // Single click:
+            // Sadece boş alana (cv-container dışı veya scaling-layer arka planına) tıklandığında sürükleme adayı
+            if (!e.target.closest('.cv-container') || e.target.id === 'scaling-layer') {
+                isDragging = true;
+                dragStart = { x: e.clientX - panX, y: e.clientY - panY };
+                layer.style.cursor = 'grabbing';
             }
         });
-        document.addEventListener('mousemove',(e)=>{if(isDragging){panX=e.clientX-dragStart.x;panY=e.clientY-dragStart.y;updateTransform();}});
-        document.addEventListener('mouseup',()=>{isDragging=false; layer.style.cursor='';});
 
-        document.addEventListener('dblclick',(e)=>{
-            const target=e.target.closest('[data-path]');
-            if(editMode&&target){
-                target.contentEditable="true";target.focus();
-                const range=document.createRange();range.selectNodeContents(target);const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                panX = e.clientX - dragStart.x;
+                panY = e.clientY - dragStart.y;
+                updateTransform();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            layer.style.cursor = '';
+        });
+
+        document.addEventListener('dblclick', (e) => {
+            // In edit mode: double click on an icon also opens icon picker
+            if (editMode) {
+                const iconEl = e.target.closest('[data-icon-path]');
+                if (iconEl) {
+                    const iconPath = iconEl.getAttribute('data-icon-path');
+                    const curCls = iconEl.className || '';
+                    window.showIconPicker(iconPath, curCls);
+                    e.preventDefault();
+                    return;
+                }
+            }
+
+            const target = e.target.closest('[data-path]');
+            if (editMode && target) {
+                // Edit modunda çift tıklanırsa metin değiştirilebilir olsun
+                target.contentEditable = "true";
+                target.focus();
+                const range = document.createRange();
+                range.selectNodeContents(target);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
 
                 const onInput = () => {
                     if (autoDutchFix) {
@@ -617,18 +822,155 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 target.addEventListener('input', onInput);
 
-                const onBlur=()=>{
+                const onBlur = () => {
                     target.removeEventListener('input', onInput);
-                    target.contentEditable="false";
+                    target.contentEditable = "false";
                     let val = target.textContent.trim();
                     if (autoDutchFix) val = cleanDutchChars(val);
-                    setPath(profileData[activeKey],target.getAttribute('data-path'),val);
+                    setPath(profileData[activeKey], target.getAttribute('data-path'), val);
                     commitData();
                     renderCV();
                 };
-                target.addEventListener('blur',onBlur,{once:true});
-                target.addEventListener('keydown',(evt)=>{if(evt.key==='Enter'){evt.preventDefault();target.blur();}});
+                target.addEventListener('blur', onBlur, { once: true });
+                target.addEventListener('keydown', (evt) => {
+                    if (evt.key === 'Enter') {
+                        evt.preventDefault();
+                        target.blur();
+                    }
+                });
             }
+        });
+
+        // ==========================================================================
+        // ICON PICKER MODAL (1400+ ICONS)
+        // ==========================================================================
+        let activeEditingIconPath = null;
+        let selectedIconCat = 'all';
+
+        window.hideIconPicker = () => {
+            const modal = $('icon-picker-modal');
+            if (modal) modal.style.display = 'none';
+            hideModal();
+            activeEditingIconPath = null;
+        };
+
+        window.showIconPicker = (path, currentClass) => {
+            activeEditingIconPath = path;
+            const modal = $('icon-picker-modal');
+            if (!modal) return;
+            showModal('icon-picker-modal');
+
+            const customInput = $('icon-custom-input');
+            const preview = $('icon-custom-preview');
+            const cls = currentClass ? currentClass.split(' ').filter(c => c.startsWith('fa-')).join(' ') : '';
+            if (customInput) customInput.value = cls || '';
+            if (preview) preview.innerHTML = `<i class="${cls || 'fa-solid fa-star'}"></i>`;
+
+            renderIconCategories();
+            filterAndRenderIcons('');
+            const searchInp = $('icon-search-input');
+            if (searchInp) {
+                searchInp.value = '';
+                setTimeout(() => searchInp.focus(), 120);
+            }
+        };
+
+        const renderIconCategories = () => {
+            const tabs = $('icon-categories-tabs');
+            if (!tabs) return;
+            const cats = window.CV_ICON_CATEGORIES || {};
+            let html = `<button type="button" class="icon-cat-pill ${selectedIconCat==='all'?'active':''}" data-cat="all"><i class="fa-solid fa-border-all"></i> Tümü</button>`;
+            Object.keys(cats).forEach(k => {
+                const c = cats[k];
+                html += `<button type="button" class="icon-cat-pill ${selectedIconCat===k?'active':''}" data-cat="${k}"><i class="${c.icon}"></i> ${c.label}</button>`;
+            });
+            tabs.innerHTML = html;
+            tabs.querySelectorAll('.icon-cat-pill').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    tabs.querySelectorAll('.icon-cat-pill').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedIconCat = btn.getAttribute('data-cat');
+                    const term = ($('icon-search-input')?.value || '').trim();
+                    filterAndRenderIcons(term);
+                });
+            });
+        };
+
+        const filterAndRenderIcons = (term = '') => {
+            const grid = $('icon-picker-grid');
+            const countBadge = $('icon-search-count');
+            if (!grid) return;
+            const catalog = window.CV_ICON_CATALOG || [];
+            const q = term.toLowerCase();
+
+            const filtered = catalog.filter(item => {
+                const matchCat = (selectedIconCat === 'all' || item.cat === selectedIconCat);
+                if (!matchCat) return false;
+                if (!q) return true;
+                return item.cls.toLowerCase().includes(q) || item.name.toLowerCase().includes(q);
+            });
+
+            if (countBadge) countBadge.textContent = `${filtered.length} ikon`;
+
+            const itemsToRender = filtered.slice(0, 400);
+            let html = '';
+            itemsToRender.forEach(item => {
+                html += `<button type="button" class="icon-picker-item" data-icon-cls="${item.cls}" title="${item.cls} (${item.name})">
+                    <i class="${item.cls}"></i>
+                </button>`;
+            });
+            if (filtered.length === 0) {
+                html = '<div style="grid-column: 1/-1; text-align: center; padding: 28px; color: var(--text-sub); font-size: 12px;"><i class="fa-solid fa-magnifying-glass" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;"></i><br>Eşleşen ikon bulunamadı. Yukarıdaki özel sınıf kutusuna istediğiniz FontAwesome sınıfını yazabilirsiniz.</div>';
+            }
+            grid.innerHTML = html;
+
+            grid.querySelectorAll('.icon-picker-item').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const cls = btn.getAttribute('data-icon-cls');
+                    applySelectedIcon(cls);
+                });
+            });
+        };
+
+        const applySelectedIcon = (iconClass) => {
+            if (!activeEditingIconPath) return;
+            setPath(profileData[activeKey], activeEditingIconPath, iconClass);
+            
+            // If editing mobility item that had svg, remove svg so the new icon shows
+            if (activeEditingIconPath.startsWith('mobility.items.')) {
+                const p = activeEditingIconPath.replace('.icon', '.svg');
+                setPath(profileData[activeKey], p, null);
+            }
+
+            commitData();
+            renderCV();
+            window.hideIconPicker();
+            window.showToast(`İkon güncellendi: ${iconClass}`, 'fa-solid fa-check');
+        };
+
+        const customInputEl = $('icon-custom-input');
+        if (customInputEl) {
+            customInputEl.addEventListener('input', (e) => {
+                const cls = e.target.value.trim() || 'fa-solid fa-star';
+                const preview = $('icon-custom-preview');
+                if (preview) preview.innerHTML = `<i class="${cls}"></i>`;
+            });
+            customInputEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = customInputEl.value.trim();
+                    if (val) applySelectedIcon(val);
+                }
+            });
+        }
+
+        $('icon-custom-apply-btn')?.addEventListener('click', () => {
+            const val = ($('icon-custom-input')?.value || '').trim();
+            if (val) applySelectedIcon(val);
+        });
+
+        $('icon-search-input')?.addEventListener('input', (e) => {
+            filterAndRenderIcons(e.target.value.trim());
         });
 
         const showModal=(id)=>{$('custom-modal-container').style.display='flex';setTimeout(()=>$('custom-modal-container').classList.add('active'),10);document.querySelectorAll('.custom-modal').forEach(m=>m.style.display='none');$(id).style.display='block';window.activeModalId=id;};
@@ -1112,5 +1454,102 @@ document.addEventListener('DOMContentLoaded', () => {
         initHistory();renderCV();updateEditUI();updateTransform();
     };
 
-    startApp();
+    // ==========================================================================
+    // SECURE AUTHENTICATION GATEKEEPER (!Eymen2017.)
+    // ==========================================================================
+    const isAuthorized = () => {
+        const p = new URLSearchParams(window.location.search);
+        if (p.get('headless') === '1') return true;
+        return localStorage.getItem('cv_auth_success') === 'true' || 
+               sessionStorage.getItem('cv_auth_success') === 'true' || 
+               document.cookie.includes('cv_auth_success=true');
+    };
+
+    const setAuthorized = () => {
+        localStorage.setItem('cv_auth_success', 'true');
+        sessionStorage.setItem('cv_auth_success', 'true');
+        document.cookie = "cv_auth_success=true; max-age=315360000; path=/; SameSite=Lax";
+        document.documentElement.classList.add('is-authenticated');
+    };
+
+    const proceedToApp = () => {
+        const ls = document.getElementById('login-screen');
+        if (ls) ls.remove();
+        const app = document.getElementById('app-wrapper');
+        if (app) app.style.display = 'block';
+        startApp();
+    };
+
+    if (isAuthorized()) {
+        proceedToApp();
+    } else {
+        const loginBtn = document.getElementById('login-btn');
+        const loginPass = document.getElementById('login-password');
+        const loginErr = document.getElementById('login-error');
+        const passToggleBtn = document.getElementById('toggle-password-visibility');
+        const passEyeIcon = document.getElementById('pass-eye-icon');
+
+        if (passToggleBtn && loginPass) {
+            passToggleBtn.addEventListener('click', () => {
+                if (loginPass.type === 'password') {
+                    loginPass.type = 'text';
+                    if (passEyeIcon) passEyeIcon.className = 'fa-solid fa-eye-slash';
+                } else {
+                    loginPass.type = 'password';
+                    if (passEyeIcon) passEyeIcon.className = 'fa-solid fa-eye';
+                }
+            });
+        }
+
+        const doLogin = async () => {
+            const pass = loginPass ? loginPass.value.trim() : '';
+            let isOk = (pass === '!Eymen2017.');
+
+            if (!isOk) {
+                try {
+                    const r = await fetch('api.php?action=login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pass })
+                    });
+                    const res = await r.json();
+                    if (res && res.success) isOk = true;
+                } catch(e) {}
+            } else {
+                try {
+                    fetch('api.php?action=login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pass })
+                    }).catch(() => {});
+                } catch(e) {}
+            }
+
+            if (isOk) {
+                setAuthorized();
+                proceedToApp();
+            } else {
+                if (loginErr) {
+                    loginErr.textContent = 'Hatalı şifre!';
+                    loginErr.style.opacity = '1';
+                    setTimeout(() => { if (loginErr) loginErr.style.opacity = '0'; }, 3000);
+                }
+                if (loginPass) {
+                    loginPass.focus();
+                    loginPass.select();
+                }
+            }
+        };
+
+        if (loginBtn) loginBtn.addEventListener('click', doLogin);
+        if (loginPass) {
+            loginPass.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    doLogin();
+                }
+            });
+            setTimeout(() => loginPass.focus(), 150);
+        }
+    }
 });

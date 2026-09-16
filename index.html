@@ -2,7 +2,18 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
-    <script>(function(){if(new URLSearchParams(window.location.search).get('headless')==='1'){document.documentElement.setAttribute('data-headless','1');}})();</script>
+    <script>
+    (function(){
+        var p = new URLSearchParams(window.location.search);
+        if(p.get('headless')==='1'){ document.documentElement.setAttribute('data-headless','1'); }
+        var isAuth = localStorage.getItem('cv_auth_success') === 'true' || 
+                     sessionStorage.getItem('cv_auth_success') === 'true' || 
+                     document.cookie.includes('cv_auth_success=true');
+        if(isAuth || p.get('headless')==='1'){
+            document.documentElement.classList.add('is-authenticated');
+        }
+    })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Online CV & Portfolio</title>
     
@@ -21,6 +32,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
+    <script src="assets/icons_data.js"></script>
     <script src="config/config.js"></script>
     <script src="config/users/boekhoudkundigassistent.js"></script>
     <script src="config/users/student.js"></script>
@@ -33,14 +45,41 @@
 </head>
 <body>
 
+<div id="login-screen" class="login-screen-overlay no-print">
+    <div class="login-card">
+        <div class="login-badge-icon">
+            <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h2 class="login-title">SECURE ACCESS</h2>
+        <p class="login-subtitle">CV KONTROL PANELİ</p>
+        <form id="login-form" onsubmit="return false;">
+            <div class="login-field">
+                <label for="login-password">Giriş Şifresi</label>
+                <div class="login-input-wrap">
+                    <i class="fa-solid fa-lock input-icon"></i>
+                    <input type="password" id="login-password" placeholder="Şifrenizi girin..." autocomplete="current-password" />
+                    <button type="button" id="toggle-password-visibility" class="toggle-pass-btn" tabindex="-1">
+                        <i class="fa-solid fa-eye" id="pass-eye-icon"></i>
+                    </button>
+                </div>
+            </div>
+            <button type="button" id="login-btn" class="login-submit-btn">
+                <span>Giriş Yap</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+            <div id="login-error" class="login-error-msg"></div>
+        </form>
+    </div>
+</div>
+
 <div id="app-tooltip" class="app-tooltip no-print">Tooltip</div>
-<div id="app-wrapper">
+<div id="app-wrapper" style="display: none;">
 <div id="publish-controls" class="publish-controls-container no-print" style="display: none;">
     <button id="revert-draft-btn" class="pub-btn revert-btn" data-tooltip="Taslağı Sil ve Canlı Sürüme Dön" onclick="window.revertDraft()">
-        <i class="fa-solid fa-clock-rotate-left"></i> Yayınlanmışa Dön
+        <i class="fa-solid fa-rotate-left"></i> <span>İptal / Vazgeç</span>
     </button>
-    <button id="publish-btn" class="pub-btn publish-btn" data-tooltip="Değişiklikleri Kaydet ve Yayınla" onclick="window.publishEdits()">
-        <i class="fa-solid fa-cloud-arrow-up"></i> Değişiklikleri Kaydet
+    <button id="publish-btn" class="pub-btn publish-btn" data-tooltip="Değişiklikleri MySQL ve Canlı Siteye Kaydet" onclick="window.publishEdits()">
+        <i class="fa-solid fa-cloud-arrow-up"></i> <span>Değişiklikleri Kaydet &amp; Yayınla</span>
     </button>
 </div>
 <div class="actions-container no-print" id="actions-container" data-html2canvas-ignore="true">
@@ -316,6 +355,44 @@
 
         <div class="modal-buttons">
             <button id="close-settings-modal" class="modal-btn primary">Tamam</button>
+        </div>
+    </div>
+
+    <!-- Icon Picker Modal -->
+    <div id="icon-picker-modal" class="custom-modal icon-picker-modal" style="display: none;">
+        <div class="icon-picker-header">
+            <h3 class="icon-picker-title"><i class="fa-solid fa-icons"></i> İkon Değiştir</h3>
+            <button type="button" class="icon-picker-close-x" onclick="window.hideIconPicker()">&times;</button>
+        </div>
+        <p class="icon-picker-subtitle">Sayfadaki ikonu 1400+ zengin listeden seçebilir, arayabilir veya özel FontAwesome sınıfı yazabilirsiniz.</p>
+
+        <div class="icon-picker-custom-box">
+            <label><i class="fa-solid fa-terminal"></i> Özel FontAwesome Sınıfı Girin:</label>
+            <div class="icon-custom-input-row">
+                <div class="icon-live-preview" id="icon-custom-preview"><i class="fa-solid fa-star"></i></div>
+                <input type="text" id="icon-custom-input" placeholder="Örn: fa-solid fa-rocket veya fa-brands fa-github" />
+                <button type="button" id="icon-custom-apply-btn" class="modal-btn primary">Uygula</button>
+            </div>
+        </div>
+
+        <div class="icon-picker-search-bar">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="icon-search-input" placeholder="İkon ara... (örn: phone, code, car, school, star)" autocomplete="off" />
+            <span id="icon-search-count" class="icon-count-badge">1400+</span>
+        </div>
+
+        <div class="icon-picker-categories" id="icon-categories-tabs">
+            <!-- Category pills populated by JS -->
+        </div>
+
+        <div class="icon-picker-grid-wrap">
+            <div class="icon-picker-grid" id="icon-picker-grid">
+                <!-- 1400+ icons rendered here -->
+            </div>
+        </div>
+
+        <div class="modal-buttons" style="margin-top: 14px;">
+            <button type="button" class="modal-btn secondary" onclick="window.hideIconPicker()">Vazgeç</button>
         </div>
     </div>
 </div>
