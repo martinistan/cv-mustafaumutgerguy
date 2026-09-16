@@ -42,6 +42,29 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="node_modules/docx/dist/index.iife.js"></script>
+
+<script>
+window.performLogout = function(skipConfirm) {
+    if (!skipConfirm && !confirm('Oturumu kapatmak istediğinize emin misiniz?')) return;
+    try {
+        fetch('api.php?action=logout', { method: 'POST' }).catch(function(){});
+    } catch(e) {}
+    localStorage.removeItem('cv_auth_success');
+    localStorage.removeItem('cv_remember_me');
+    sessionStorage.removeItem('cv_auth_success');
+    sessionStorage.removeItem('cv_discord_auth_expiry');
+    document.cookie = 'cv_auth_success=; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    var toast = document.getElementById('cv-toast');
+    if (toast) {
+        toast.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> <span>Güvenli çıkış yapıldı...</span>';
+        toast.classList.add('show');
+    }
+    setTimeout(function() {
+        window.location.href = window.location.pathname + '?v=' + Date.now();
+    }, 400);
+};
+</script>
+
 </head>
 <body style="margin: 0; padding: 0; background: #0c0d0e;">
 

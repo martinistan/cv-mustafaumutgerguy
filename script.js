@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof CV_CONFIG === 'undefined') return;
     const $ = id => document.getElementById(id);
 
+    setTimeout(() => { const btn = document.getElementById('logout-btn'); if(btn) btn.addEventListener('click', () => window.performLogout()); }, 500);
     window.performLogout = async (skipConfirm) => {
         if (!skipConfirm && !confirm('Oturumu kapatmak istediğinize emin misiniz?\n\nYeniden giriş yapmak için şifre veya Discord 2FA kodu gerekecek.')) return;
 
