@@ -190,6 +190,9 @@
     <button id="icon-catalog-pub-btn" class="pub-btn icon-pub-btn" data-tooltip="1400+ İkon Listesi &amp; ID Kopyala" onclick="window.showIconCatalog()">
         <i class="fa-solid fa-icons"></i> <span>İkon Listesi</span>
     </button>
+    <button id="backup-pub-btn" class="pub-btn backup-pub-btn" data-tooltip="Cookie &amp; MySQL Yedek Merkezi" onclick="window.showBackupModal()">
+        <i class="fa-solid fa-hard-drive"></i> <span>Yedekler</span>
+    </button>
     <button id="publish-btn" class="pub-btn publish-btn" data-tooltip="Değişiklikleri MySQL ve Canlı Siteye Kaydet" onclick="window.publishEdits()">
         <i class="fa-solid fa-cloud-arrow-up"></i> <span>Değişiklikleri Kaydet &amp; Yayınla</span>
     </button>
@@ -428,17 +431,86 @@
     </div>
 
     
-    <div id="backup-modal" class="custom-modal" style="display: none;">
-        <h3 id="backup-modal-title">Yedek Yönetimi</h3>
-        <div class="backup-input-group">
-            <input type="text" id="backup-name-input" placeholder="Yedek ismi girin..." />
-            <button id="save-backup-btn" class="modal-btn primary"><i class="fa-solid fa-floppy-disk"></i> Kaydet</button>
+    <div id="backup-modal" class="custom-modal backup-modal-enhanced" style="display: none;">
+        <div class="backup-modal-header">
+            <div class="backup-header-icon"><i class="fa-solid fa-database"></i></div>
+            <div>
+                <h3 id="backup-modal-title">Yedekleme &amp; Senkronizasyon</h3>
+                <p class="backup-header-sub">Kişisel PC yedeği ve MySQL canlı sunucu yönetimi</p>
+            </div>
         </div>
-        <div class="backup-list-container">
-            <h4 id="backup-list-title">Kayıtlı Yedekler</h4>
-            <div id="backup-list" class="backup-list"></div>
+
+        <div class="backup-modal-body">
+            <!-- 1. BU BİLGİSAYAR / COOKIE YEDEĞİ -->
+            <div class="backup-section-card cookie-card">
+                <div class="backup-card-title">
+                    <i class="fa-solid fa-cookie-bite" style="color: #f59e0b;"></i>
+                    <span>Bu Bilgisayar / Cookie Yedeği</span>
+                    <span class="backup-badge pc-badge">Kişisel PC</span>
+                </div>
+                <p class="backup-card-desc">Sadece bu tarayıcıya/bilgisayara özeldir. İnternet olmasa veya veritabanı değişse bile CV'nizi bu bilgisayarda güvende tutar.</p>
+                <div id="cookie-backup-status" class="backup-status-pill">
+                    <i class="fa-solid fa-clock-rotate-left"></i> <span id="cookie-backup-time-text">Son Cookie Yedeği: Kontrol ediliyor...</span>
+                </div>
+                <div class="backup-btn-grid">
+                    <button id="btn-save-cookie-backup" class="modal-btn primary" title="Mevcut CV'yi bu tarayıcıya/cookie'ye yedekle">
+                        <i class="fa-solid fa-cookie-bite"></i> <span>Cookie Yedeği Al</span>
+                    </button>
+                    <button id="btn-restore-cookie-backup" class="modal-btn warning" title="En son cookie yedeğinden bu bilgisayara geri yükle">
+                        <i class="fa-solid fa-rotate-left"></i> <span>Cookie'den Yükle</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. MYSQL CANLI VERİTABANI (DİĞER KULLANICILARIN GÖRDÜĞÜ) -->
+            <div class="backup-section-card mysql-card">
+                <div class="backup-card-title">
+                    <i class="fa-solid fa-cloud" style="color: #10b981;"></i>
+                    <span>MySQL Canlı Sunucu (Herkesin Gördüğü)</span>
+                    <span class="backup-badge live-badge">Canlı Site</span>
+                </div>
+                <p class="backup-card-desc">MySQL'e kaydedilen verileri sitedeki tüm ziyaretçiler ve diğer cihazlar görür.</p>
+                <div id="mysql-backup-status" class="backup-status-pill success">
+                    <i class="fa-solid fa-globe"></i> <span>MySQL Veritabanı: Yayına Hazır</span>
+                </div>
+                <div class="backup-btn-grid">
+                    <button id="btn-sync-mysql-modal" class="modal-btn success" title="Değişiklikleri MySQL'e yaz ve tüm kullanıcılara yayınla" onclick="window.publishEdits()">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> <span>MySQL'e Kaydet &amp; Yayınla</span>
+                    </button>
+                    <button id="btn-fetch-mysql-modal" class="modal-btn secondary" title="Canlı MySQL veritabanındaki son verileri çekip yükle">
+                        <i class="fa-solid fa-cloud-arrow-down"></i> <span>MySQL'den Çek</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3. KAYITLI PC YEDEKLERİ LİSTESİ -->
+            <div class="backup-section-card history-card">
+                <div class="backup-card-title">
+                    <i class="fa-solid fa-clock-rotate-left" style="color: var(--accent);"></i>
+                    <span>Kayıtlı PC Yedekleri Listesi</span>
+                </div>
+                <div class="backup-input-group">
+                    <input type="text" id="backup-name-input" placeholder="İsteğe bağlı yedek adı (Örn: Hollandaca Başvuru)..." />
+                    <button id="save-backup-btn" class="modal-btn secondary" title="İsimli yedek kaydet"><i class="fa-solid fa-plus"></i> Ekle</button>
+                </div>
+                <div id="backup-list" class="backup-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- 4. DOSYA OLARAK İNDİR / YÜKLE -->
+            <div class="backup-file-actions">
+                <button id="btn-download-json" class="modal-btn small-btn" title="JSON dosyası olarak bilgisayarına indir">
+                    <i class="fa-solid fa-download"></i> JSON İndir
+                </button>
+                <button id="btn-upload-json" class="modal-btn small-btn" title="JSON dosyasından geri yükle">
+                    <i class="fa-solid fa-upload"></i> JSON Yükle
+                </button>
+                <input type="file" id="backup-file-input" accept=".json" style="display: none;" />
+            </div>
         </div>
-        <div class="modal-buttons" style="margin-top: 15px;">
+
+        <div class="modal-buttons" style="margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px;">
             <button id="close-backup-modal" class="modal-btn secondary">Kapat</button>
         </div>
     </div>

@@ -45,16 +45,22 @@ document.addEventListener('DOMContentLoaded', () => {
         let showHidden = localStorage.getItem('cv_show_hidden') === 'true';
         let profileData = editMode ? draftData : liveData;
         
-        const syncFromMySQL = async () => {
+        let updateBackupUI = null;
+        const syncFromMySQL = async (isManual = false) => {
             try {
                 const res = await fetch('api.php?action=get_data');
                 const json = await res.json();
-                if (json && json.success && json.data && Object.keys(json.data).length > 0) {
+                if (json && json.success && json.data && typeof json.data === 'object' && Object.keys(json.data).length > 0) {
                     let updated = false;
                     Object.keys(json.data).forEach(k => {
                         liveData[k] = json.data[k];
                         updated = true;
                     });
+                    if (json.activeProfile && !getProfileFromHash() && !localStorage.getItem('activeProfile_custom')) {
+                        if (liveData[json.activeProfile]) {
+                            activeKey = json.activeProfile;
+                        }
+                    }
                     if (updated) {
                         localStorage.setItem('cv_profiles', JSON.stringify(liveData));
                         if (!editMode) {
@@ -62,8 +68,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             renderCV();
                         }
                     }
+                    if (isManual) {
+                        window.showToast('☁️ MySQL canlı verileri başarıyla çekildi ve yüklendi!', 'fa-solid fa-cloud-arrow-down');
+                        if (typeof updateBackupUI === 'function') updateBackupUI();
+                    }
+                } else if (isManual) {
+                    window.showToast('MySQL sunucusunda henüz kayıtlı veri yok.', 'fa-solid fa-circle-info');
                 }
-            } catch(e) {}
+            } catch(e) {
+                if (isManual) {
+                    window.showToast('MySQL sunucusuna bağlanılamadı!', 'fa-solid fa-triangle-exclamation');
+                }
+            }
         };
         syncFromMySQL();
 
@@ -131,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         window.publishEdits = async () => {
-            if (!confirm('Tüm değişiklikler MySQL veritabanına ve canlı siteye kaydedilip yayınlansın mı?')) return;
+            if (!confirm('Tüm değişiklikler MySQL veritabanına ve canlı siteye kaydedilip yayınlansın mı?\n\n(Siteyi ziyaret eden tüm kullanıcılar ve cihazlar bu sürümü görecek)')) return;
             
             const btn = $('publish-btn');
             const originalHtml = btn ? btn.innerHTML : '';
@@ -143,11 +159,16 @@ document.addEventListener('DOMContentLoaded', () => {
             liveData = JSON.parse(JSON.stringify(draftData));
             localStorage.setItem('cv_profiles', JSON.stringify(liveData));
 
+            // Auto-save local PC cookie backup whenever publishing to MySQL
+            if (typeof saveCookieBackup === 'function') {
+                saveCookieBackup('Canlı Yayına Alınan Sürüm (' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) + ')', true);
+            }
+
             try {
                 const res = await fetch('api.php?action=save_data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ profiles: liveData })
+                    body: JSON.stringify({ profiles: liveData, activeProfile: activeKey })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -168,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 initHistory();
                 updateEditUI();
                 renderCV();
+                if (typeof updateBackupUI === 'function') updateBackupUI();
             }
         };
 
@@ -1180,7 +1202,14 @@ document.addEventListener('DOMContentLoaded', () => {
             filterAndRenderIcons(e.target.value.trim());
         });
 
-        const showModal=(id)=>{$('custom-modal-container').style.display='flex';setTimeout(()=>$('custom-modal-container').classList.add('active'),10);document.querySelectorAll('.custom-modal').forEach(m=>m.style.display='none');$(id).style.display='block';window.activeModalId=id;};
+        const showModal=(id)=>{
+            $('custom-modal-container').style.display='flex';
+            setTimeout(()=>$('custom-modal-container').classList.add('active'),10);
+            document.querySelectorAll('.custom-modal').forEach(m=>m.style.display='none');
+            const target = $(id);
+            if (target) target.style.display = (id === 'icon-picker-modal') ? 'flex' : 'block';
+            window.activeModalId=id;
+        };
         const hideModal=()=>{$('custom-modal-container').classList.remove('active');setTimeout(()=>{$('custom-modal-container').style.display='none';window.activeModalId=null;},300);};
         $('custom-modal-container').addEventListener('mousedown',(e)=>{if(e.target===$('custom-modal-container'))hideModal();});
         document.addEventListener('keydown',(e)=>{if(window.activeModalId){if(e.key==='Escape')hideModal();if(e.key==='Enter'&&window.activeModalId==='confirm-edit-modal')$('confirm-edit-yes').click();}});
@@ -1215,8 +1244,314 @@ document.addEventListener('DOMContentLoaded', () => {
 
         $('hidden-toggle').addEventListener('click',()=>{showHidden=!showHidden;localStorage.setItem('cv_show_hidden',showHidden);$('hidden-toggle').classList.toggle('primary',showHidden);renderCV();});
         
-        if ($('backup-toggle')) $('backup-toggle').addEventListener('click', () => showModal('backup-modal'));
+        // ==========================================
+        // COOKIE & LOCAL BACKUP SYSTEM
+        // ==========================================
+        const setCookie = (name, value, days = 365) => {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + encodeURIComponent(value) + expires + "; path=/; SameSite=Lax";
+        };
+
+        const getCookie = (name) => {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+            }
+            return null;
+        };
+
+        const saveCookieBackup = (customName, silent = false) => {
+            try {
+                const dataToSave = editMode ? draftData : (profileData || liveData);
+                const timestamp = Date.now();
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('tr-TR') + ' ' + now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                const name = customName || ('Cookie Yedeği ' + dateStr);
+                const profileKeys = Object.keys(dataToSave || {});
+
+                // 1. Save main backup to localStorage
+                const backupPayload = {
+                    timestamp,
+                    dateStr,
+                    name,
+                    profiles: profileKeys,
+                    data: dataToSave
+                };
+                localStorage.setItem('cv_cookie_backup', JSON.stringify(backupPayload));
+
+                // 2. Set long-lived cookie with metadata
+                const metaObj = {
+                    time: timestamp,
+                    date: dateStr,
+                    name: name.slice(0, 30),
+                    count: profileKeys.length
+                };
+                setCookie('cv_cookie_backup_meta', JSON.stringify(metaObj), 365);
+
+                // 3. Add to snapshot history list
+                let list = [];
+                try {
+                    list = JSON.parse(localStorage.getItem('cv_saved_backups_list')) || [];
+                } catch(e) {}
+                list.unshift({
+                    id: 'b_' + timestamp,
+                    name,
+                    dateStr,
+                    timestamp,
+                    count: profileKeys.length,
+                    data: dataToSave
+                });
+                if (list.length > 25) list = list.slice(0, 25);
+                localStorage.setItem('cv_saved_backups_list', JSON.stringify(list));
+
+                if (typeof updateBackupUI === 'function') updateBackupUI();
+
+                if (!silent) {
+                    window.showToast('🍪 Cookie / Cihaz Yedeği Başarıyla Alındı!', 'fa-solid fa-cookie-bite');
+                }
+                return true;
+            } catch(e) {
+                if (!silent) {
+                    window.showToast('Yedek alınırken hata oluştu: ' + e.message, 'fa-solid fa-triangle-exclamation');
+                }
+                return false;
+            }
+        };
+
+        const restoreCookieBackup = () => {
+            let backup = null;
+            try {
+                const raw = localStorage.getItem('cv_cookie_backup');
+                if (raw) backup = JSON.parse(raw);
+            } catch(e) {}
+
+            if (!backup || !backup.data || Object.keys(backup.data).length === 0) {
+                window.showToast('Bu bilgisayarda kayıtlı cookie yedeği bulunamadı.', 'fa-solid fa-circle-info');
+                return;
+            }
+
+            const confirmMsg = `Bu bilgisayardaki son Cookie Yedeği geri yüklensin mi?\n\nYedek Adı: ${backup.name || 'Cookie Yedeği'}\nTarih: ${backup.dateStr}\n\nMevcut çalışma alanınız bu yedeğe dönecektir.`;
+            if (!confirm(confirmMsg)) return;
+
+            const cloned = JSON.parse(JSON.stringify(backup.data));
+            profileData = cloned;
+            if (editMode) {
+                draftData = cloned;
+                localStorage.setItem('cv_profiles_draft', JSON.stringify(draftData));
+            } else {
+                liveData = cloned;
+                localStorage.setItem('cv_profiles', JSON.stringify(liveData));
+            }
+
+            initHistory();
+            renderCV();
+            hideModal();
+            window.showToast('✨ Cookie Yedeğinden Başarıyla Geri Yüklendi!', 'fa-solid fa-rotate-left');
+        };
+
+        window.restoreSnapshot = (id) => {
+            let list = [];
+            try {
+                list = JSON.parse(localStorage.getItem('cv_saved_backups_list')) || [];
+            } catch(e) {}
+
+            const found = list.find(item => item.id === id);
+            if (!found || !found.data) {
+                window.showToast('Yedek kaydı bulunamadı.', 'fa-solid fa-triangle-exclamation');
+                return;
+            }
+
+            if (!confirm(`"${found.name}" (${found.dateStr}) yedeği geri yüklensin mi?`)) return;
+
+            const cloned = JSON.parse(JSON.stringify(found.data));
+            profileData = cloned;
+            if (editMode) {
+                draftData = cloned;
+                localStorage.setItem('cv_profiles_draft', JSON.stringify(draftData));
+            } else {
+                liveData = cloned;
+                localStorage.setItem('cv_profiles', JSON.stringify(liveData));
+            }
+
+            initHistory();
+            renderCV();
+            hideModal();
+            window.showToast('✨ Yedek başarıyla geri yüklendi!', 'fa-solid fa-rotate-left');
+        };
+
+        window.deleteSnapshot = (id) => {
+            let list = [];
+            try {
+                list = JSON.parse(localStorage.getItem('cv_saved_backups_list')) || [];
+            } catch(e) {}
+
+            const found = list.find(item => item.id === id);
+            const name = found ? found.name : 'bu';
+            if (!confirm(`"${name}" yedeğini listeden silmek istediğinize emin misiniz?`)) return;
+
+            list = list.filter(item => item.id !== id);
+            localStorage.setItem('cv_saved_backups_list', JSON.stringify(list));
+            if (typeof updateBackupUI === 'function') updateBackupUI();
+            window.showToast('🗑️ Yedek listeden silindi.', 'fa-solid fa-trash');
+        };
+
+        updateBackupUI = () => {
+            const statusEl = $('cookie-backup-time-text');
+            let backup = null;
+            try {
+                const raw = localStorage.getItem('cv_cookie_backup');
+                if (raw) backup = JSON.parse(raw);
+            } catch(e) {}
+
+            if (statusEl) {
+                if (backup && backup.dateStr) {
+                    statusEl.textContent = `Son Yedek: ${backup.dateStr} (${backup.name || 'Cookie Yedeği'})`;
+                } else {
+                    const cookieMeta = getCookie('cv_cookie_backup_meta');
+                    if (cookieMeta) {
+                        try {
+                            const meta = JSON.parse(cookieMeta);
+                            statusEl.textContent = `Son Yedek: ${meta.date || ''} (${meta.name || 'Cookie'})`;
+                        } catch(e) {
+                            statusEl.textContent = 'Son Cookie Yedeği: Henüz bu bilgisayara yedek alınmadı.';
+                        }
+                    } else {
+                        statusEl.textContent = 'Son Cookie Yedeği: Henüz bu bilgisayara yedek alınmadı.';
+                    }
+                }
+            }
+
+            const listEl = $('backup-list');
+            if (listEl) {
+                let list = [];
+                try {
+                    list = JSON.parse(localStorage.getItem('cv_saved_backups_list')) || [];
+                } catch(e) {}
+
+                if (list.length === 0) {
+                    listEl.innerHTML = '<div style="text-align: center; font-size: 11px; color: var(--text-sub); padding: 12px 6px;">Henüz kayıtlı ek PC yedeği yok. Yukarıdan isim girip "Ekle" butonuna basabilirsiniz.</div>';
+                } else {
+                    listEl.innerHTML = list.map(item => `
+                        <div class="backup-item">
+                            <div class="backup-info">
+                                <div class="backup-item-name" title="${item.name}">${item.name}</div>
+                                <div class="backup-item-date">${item.dateStr} • ${item.count || 2} Profil</div>
+                            </div>
+                            <div class="backup-item-actions">
+                                <button type="button" class="backup-action-btn" title="Geri Yükle" onclick="window.restoreSnapshot('${item.id}')">
+                                    <i class="fa-solid fa-rotate-left"></i>
+                                </button>
+                                <button type="button" class="backup-action-btn delete-btn" title="Sil" onclick="window.deleteSnapshot('${item.id}')">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+        };
+
+        const downloadJsonBackup = () => {
+            const dataToSave = editMode ? draftData : (profileData || liveData);
+            const str = JSON.stringify(dataToSave, null, 2);
+            const blob = new Blob([str], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `cv_backup_${activeKey}_${dateStr}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            window.showToast('📁 JSON yedeği başarıyla indirildi!', 'fa-solid fa-download');
+        };
+
+        const uploadJsonBackup = (file) => {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (!parsed || typeof parsed !== 'object') throw new Error('Geçersiz JSON');
+                    
+                    if (!confirm('Yüklenen JSON dosyasındaki veriler çalışma alanınıza uygulansın mı?')) return;
+
+                    profileData = parsed;
+                    if (editMode) {
+                        draftData = parsed;
+                        localStorage.setItem('cv_profiles_draft', JSON.stringify(draftData));
+                    } else {
+                        liveData = parsed;
+                        localStorage.setItem('cv_profiles', JSON.stringify(liveData));
+                    }
+
+                    saveCookieBackup('JSON Dosyasından İçe Aktarma (' + new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'}) + ')', true);
+                    initHistory();
+                    renderCV();
+                    hideModal();
+                    window.showToast('📁 JSON yedeği başarıyla yüklendi!', 'fa-solid fa-check');
+                } catch(err) {
+                    window.showToast('JSON dosyası okunamadı veya geçersiz!', 'fa-solid fa-triangle-exclamation');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        window.saveCookieBackup = saveCookieBackup;
+        window.restoreCookieBackup = restoreCookieBackup;
+        window.showBackupModal = () => {
+            if (typeof updateBackupUI === 'function') updateBackupUI();
+            showModal('backup-modal');
+        };
+
+        if ($('backup-toggle')) $('backup-toggle').addEventListener('click', window.showBackupModal);
+        if ($('backup-pub-btn')) $('backup-pub-btn').addEventListener('click', window.showBackupModal);
         if ($('close-backup-modal')) $('close-backup-modal').addEventListener('click', hideModal);
+
+        if ($('btn-save-cookie-backup')) {
+            $('btn-save-cookie-backup').addEventListener('click', () => saveCookieBackup());
+        }
+        if ($('btn-restore-cookie-backup')) {
+            $('btn-restore-cookie-backup').addEventListener('click', restoreCookieBackup);
+        }
+        if ($('save-backup-btn')) {
+            $('save-backup-btn').addEventListener('click', () => {
+                const input = $('backup-name-input');
+                const val = input ? input.value.trim() : '';
+                saveCookieBackup(val || undefined);
+                if (input) input.value = '';
+            });
+        }
+        if ($('btn-fetch-mysql-modal')) {
+            $('btn-fetch-mysql-modal').addEventListener('click', () => syncFromMySQL(true));
+        }
+        if ($('btn-download-json')) {
+            $('btn-download-json').addEventListener('click', downloadJsonBackup);
+        }
+        if ($('btn-upload-json')) {
+            $('btn-upload-json').addEventListener('click', () => {
+                const fileInput = $('backup-file-input');
+                if (fileInput) fileInput.click();
+            });
+        }
+        if ($('backup-file-input')) {
+            $('backup-file-input').addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    uploadJsonBackup(e.target.files[0]);
+                    e.target.value = '';
+                }
+            });
+        }
 
         if ($('settings-toggle')) {
             $('settings-toggle').addEventListener('click', () => {

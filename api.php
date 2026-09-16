@@ -66,13 +66,22 @@ if ($action === 'get_data') {
         $stmt = $pdo->query("SELECT profile_key, data_json FROM cv_data");
         $rows = $stmt->fetchAll();
         $result = [];
+        $activeProfile = null;
         foreach ($rows as $row) {
             $decoded = json_decode($row['data_json'], true);
             if ($decoded) {
-                $result[$row['profile_key']] = $decoded;
+                if ($row['profile_key'] === '_meta') {
+                    $activeProfile = $decoded['activeProfile'] ?? null;
+                } else {
+                    $result[$row['profile_key']] = $decoded;
+                }
             }
         }
-        echo json_encode(['success' => true, 'data' => $result]);
+        echo json_encode([
+            'success' => true,
+            'data' => (object)$result,
+            'activeProfile' => $activeProfile
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
@@ -94,6 +103,16 @@ if ($action === 'save_data') {
             $json = json_encode($val, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $stmt->execute([':k' => $key, ':d' => $json, ':d2' => $json]);
         }
+        
+        // Save active profile metadata if provided
+        if (isset($payload['activeProfile']) && is_string($payload['activeProfile'])) {
+            $meta = [
+                'activeProfile' => $payload['activeProfile'],
+                'savedAt' => date('Y-m-d H:i:s')
+            ];
+            $stmt->execute([':k' => '_meta', ':d' => json_encode($meta), ':d2' => json_encode($meta)]);
+        }
+
         echo json_encode(['success' => true, 'message' => 'Veriler MySQL veritabanına başarıyla kaydedildi!']);
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
