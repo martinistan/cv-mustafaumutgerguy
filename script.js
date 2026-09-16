@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeKey === 'umut') {
             activeKey = 'boekhoudkundigassistent';
             localStorage.setItem('activeProfile', activeKey);
+        }
         const baseProfiles = window.CV_PROFILES_DATA || {};
         if (!window.FACTORY_DEFAULTS) {
             window.FACTORY_DEFAULTS = JSON.parse(JSON.stringify(baseProfiles));
@@ -214,6 +215,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const starsHtml=(val)=>Array.from({length:3},(_,i)=>{let c=val>=i+1?'fa-solid fa-star':(val>=i+0.5?'fa-solid fa-star-half-stroke':'fa-regular fa-star');return `<i class="${c}" style="font-size:8px;color:var(--accent);margin-right:1.5px;width:8px;"></i>`;}).join('');
         const setPath=(obj,path,value)=>{
             const p=path.split('.');let c=obj;for(let i=0;i<p.length-1;i++){if(!c[p[i]])c[p[i]]={};c=c[p[i]];}c[p[p.length-1]]=value;
+        };
+        const getPath=(obj,path)=>{
+            if(!obj||!path)return undefined;
+            const p=path.split('.');let c=obj;
+            for(let i=0;i<p.length;i++){
+                if(c===null||c===undefined||typeof c!=='object')return undefined;
+                c=c[p[i]];
+            }
+            return c;
         };
         const toggleSec=(cfg,id)=>{
             const el=$(id);if(!el)return;const isV=(cfg&&cfg.visible!==false);const show=isV||(editMode&&showHidden);el.style.display=show?'block':'none';
@@ -1184,6 +1194,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if(editMode){btn.classList.add('accent');btn.querySelector('span').textContent='Live';btn.querySelector('i').className='fa-solid fa-eye';document.body.classList.add('edit-active');editEls.forEach(el=>el.style.display=el.classList.contains('action-divider')?'block':'flex');$('publish-controls').style.display='flex';if(pgGroup)pgGroup.style.display='flex';}
             else{btn.classList.remove('accent');btn.querySelector('span').textContent='Edit';btn.querySelector('i').className='fa-solid fa-pen';document.body.classList.remove('edit-active');editEls.forEach(el=>el.style.display='none');$('publish-controls').style.display='none';if(pgGroup)pgGroup.style.display='none';}
         };
+
+        $('reset-btn')?.addEventListener('click', () => {
+            const rawDefault = (window.FACTORY_DEFAULTS && window.FACTORY_DEFAULTS[activeKey]) ||
+                               (window.CV_PROFILES_DATA && window.CV_PROFILES_DATA[activeKey]);
+            if (!rawDefault) {
+                window.showToast('Varsayılan profil verisi bulunamadı.', 'fa-solid fa-triangle-exclamation');
+                return;
+            }
+
+            if (confirm('Bu sayfadaki tüm değişiklikleri sıfırlayıp orijinal fabrika şablonuna dönmek istediğinize emin misiniz?')) {
+                profileData[activeKey] = JSON.parse(JSON.stringify(rawDefault));
+                draftData[activeKey] = JSON.parse(JSON.stringify(rawDefault));
+                localStorage.setItem('cv_profiles_draft', JSON.stringify(draftData));
+                commitData();
+                renderCV();
+                window.showToast('✨ Tüm CV başarıyla varsayılana sıfırlandı!', 'fa-solid fa-rotate-left');
+            }
+        });
 
         $('hidden-toggle').addEventListener('click',()=>{showHidden=!showHidden;localStorage.setItem('cv_show_hidden',showHidden);$('hidden-toggle').classList.toggle('primary',showHidden);renderCV();});
         
