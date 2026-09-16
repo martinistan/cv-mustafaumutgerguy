@@ -1,0 +1,15 @@
+﻿DirectoryIndex index.php index.html
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# 1. Block direct access to real config/users/ for unauthenticated scrapers/copiers
+RewriteCond %{HTTP_COOKIE} !cv_auth_success=true [NC]
+RewriteRule ^config/users/.*$ assets/decoy_config.js [L]
+
+# 2. Route index.html requests to index.php so server-side gate always executes
+RewriteRule ^index\.html$ index.php [L,QSA]
+</IfModule>
+
+# Prevent directory listing
+Options -Indexes

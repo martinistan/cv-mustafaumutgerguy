@@ -18,11 +18,46 @@ if ($action === 'login') {
     $pass = trim($payload['password'] ?? '');
 
     if ($pass === '!Eymen2017.') {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['cv_auth_success'] = true;
         setcookie('cv_auth_success', 'true', time() + 315360000, '/', '', false, false);
         echo json_encode(['success' => true, 'message' => 'Giriş başarılı']);
     } else {
         echo json_encode(['success' => false, 'error' => 'Hatalı şifre!']);
     }
+    exit;
+}
+
+// Authentication check for database operations
+$isAuth = false;
+if (isset($_COOKIE['cv_auth_success']) && $_COOKIE['cv_auth_success'] === 'true') {
+    $isAuth = true;
+}
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+if (isset($_SESSION['cv_auth_success']) && $_SESSION['cv_auth_success'] === true) {
+    $isAuth = true;
+}
+
+if (!$isAuth) {
+    if ($action === 'get_data') {
+        // Return decoy demo data to unauthenticated requests/scrapers
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'boekhoudkundigassistent' => [
+                    'personal' => ['name' => 'Demo Kandidaat', 'title' => 'Voorbeeld Profiel (Beveiligd)'],
+                    'contact' => ['phone' => '+32 000 00 00 00', 'email' => 'demo.gebruiker@example.org']
+                ]
+            ]
+        ]);
+        exit;
+    }
+    http_response_code(401);
+    echo json_encode(['success' => false, 'error' => 'Yetkisiz erişim!']);
     exit;
 }
 

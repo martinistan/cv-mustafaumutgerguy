@@ -22,8 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeKey === 'umut') {
             activeKey = 'boekhoudkundigassistent';
             localStorage.setItem('activeProfile', activeKey);
-        }
         const baseProfiles = window.CV_PROFILES_DATA || {};
+        if (!window.FACTORY_DEFAULTS) {
+            window.FACTORY_DEFAULTS = JSON.parse(JSON.stringify(baseProfiles));
+        }
         
         let liveData = JSON.parse(localStorage.getItem('cv_profiles')) || {};
         let draftData = JSON.parse(localStorage.getItem('cv_profiles_draft'));
@@ -700,13 +702,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (e.button !== 0) return;
 
-            // Check if clicking an icon in edit mode
+            // In edit mode: single click on an icon should NOT open the picker, nor drag the canvas
             if (editMode && e.target.closest('[data-icon-path]')) {
-                const iconEl = e.target.closest('[data-icon-path]');
-                const path = iconEl.getAttribute('data-icon-path');
-                const curCls = iconEl.className || '';
-                window.showIconPicker(path, curCls);
-                e.preventDefault();
                 return;
             }
 
@@ -844,8 +841,70 @@ document.addEventListener('DOMContentLoaded', () => {
         // ==========================================================================
         // ICON PICKER MODAL (1400+ ICONS)
         // ==========================================================================
+        // ==========================================================================
+        // ICON PICKER MODAL (1400+ ICONS) & INSPECTOR / QUICK COPY
+        // ==========================================================================
         let activeEditingIconPath = null;
         let selectedIconCat = 'all';
+        window.currentInspectedIconCls = 'fa-solid fa-star';
+
+        const fallbackCopy = (text, callback) => {
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                ta.style.top = '0';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (callback) callback();
+            } catch (err) {
+                window.showToast(`İkon: ${text}`, 'fa-solid fa-info');
+            }
+        };
+
+        const copyIconIdToClipboard = (text) => {
+            if (!text) return;
+            window.currentInspectedIconCls = text;
+            const finish = () => {
+                const copyBtn = $('icon-inspector-copy-btn');
+                if (copyBtn) {
+                    copyBtn.innerHTML = '<i class="fa-solid fa-check" style="color: #22c55e;"></i> <span>Kopyalandı!</span>';
+                    setTimeout(() => {
+                        if (copyBtn) copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> <span>ID Kopyala</span>';
+                    }, 1800);
+                }
+                window.showToast(`📋 İkon ID Kopyalandı: ${text}`, 'fa-solid fa-copy');
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(finish).catch(() => {
+                    fallbackCopy(text, finish);
+                });
+            } else {
+                fallbackCopy(text, finish);
+            }
+        };
+
+        const updateHoverInspector = (cls, name, catKey) => {
+            if (!cls) return;
+            window.currentInspectedIconCls = cls;
+            const prev = $('icon-hover-preview');
+            const nameEl = $('icon-hover-name');
+            const badgeEl = $('icon-hover-cat');
+            const codeEl = $('icon-hover-code');
+            const cats = window.CV_ICON_CATEGORIES || {};
+            const catLabel = (cats[catKey] && cats[catKey].label) || catKey || 'Katalog';
+
+            if (prev) prev.innerHTML = `<i class="${cls}"></i>`;
+            if (nameEl) nameEl.textContent = name ? `${name}` : cls;
+            if (badgeEl) badgeEl.textContent = catLabel;
+            if (codeEl) codeEl.textContent = cls;
+        };
 
         window.hideIconPicker = () => {
             const modal = $('icon-picker-modal');
@@ -854,17 +913,37 @@ document.addEventListener('DOMContentLoaded', () => {
             activeEditingIconPath = null;
         };
 
+        window.showIconCatalog = () => {
+            window.showIconPicker(null, null);
+        };
+
         window.showIconPicker = (path, currentClass) => {
             activeEditingIconPath = path;
             const modal = $('icon-picker-modal');
             if (!modal) return;
             showModal('icon-picker-modal');
 
+            const titleEl = modal.querySelector('.icon-picker-title');
+            const subtitleEl = modal.querySelector('.icon-picker-subtitle');
+            const resetBtn = $('icon-reset-default-btn');
+
+            if (path) {
+                if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-icons"></i> İkon Değiştir';
+                if (subtitleEl) subtitleEl.textContent = 'Sayfadaki ikonu değiştirmek için bir ikona tıklayın veya ID seçin.';
+                if (resetBtn) resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> <span>Bu İkonu Varsayılana Sıfırla</span>';
+            } else {
+                if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-icons"></i> 2000+ İkon Listesi &amp; ID Kopyala';
+                if (subtitleEl) subtitleEl.textContent = 'İkonların üzerine gelerek ID\'lerini görebilir, tıklayarak anında kopyalayabilirsiniz.';
+                if (resetBtn) resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> <span>Tüm İkonları Varsayılana Sıfırla</span>';
+            }
+
             const customInput = $('icon-custom-input');
             const preview = $('icon-custom-preview');
-            const cls = currentClass ? currentClass.split(' ').filter(c => c.startsWith('fa-')).join(' ') : '';
+            const cls = currentClass ? currentClass.split(' ').filter(c => c.startsWith('fa-') || c === 'cv-icon-estep').join(' ') : 'fa-solid fa-star';
             if (customInput) customInput.value = cls || '';
             if (preview) preview.innerHTML = `<i class="${cls || 'fa-solid fa-star'}"></i>`;
+
+            updateHoverInspector(cls, currentClass ? 'Mevcut İkon' : 'Örnek İkon', 'Katalog');
 
             renderIconCategories();
             filterAndRenderIcons('');
@@ -912,10 +991,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (countBadge) countBadge.textContent = `${filtered.length} ikon`;
 
-            const itemsToRender = filtered.slice(0, 400);
+            const itemsToRender = filtered.slice(0, 500);
             let html = '';
             itemsToRender.forEach(item => {
-                html += `<button type="button" class="icon-picker-item" data-icon-cls="${item.cls}" title="${item.cls} (${item.name})">
+                html += `<button type="button" class="icon-picker-item" data-icon-cls="${item.cls}" data-icon-name="${item.name}" data-icon-cat="${item.cat}" title="${item.cls} (${item.name}) - Tıkla ve Kopyala">
                     <i class="${item.cls}"></i>
                 </button>`;
             });
@@ -925,9 +1004,32 @@ document.addEventListener('DOMContentLoaded', () => {
             grid.innerHTML = html;
 
             grid.querySelectorAll('.icon-picker-item').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const cls = btn.getAttribute('data-icon-cls');
-                    applySelectedIcon(cls);
+                const cls = btn.getAttribute('data-icon-cls');
+                const name = btn.getAttribute('data-icon-name');
+                const cat = btn.getAttribute('data-icon-cat');
+
+                btn.addEventListener('mouseenter', () => {
+                    updateHoverInspector(cls, name, cat);
+                    const inp = $('icon-custom-input');
+                    if (inp && document.activeElement !== inp) {
+                        inp.value = cls;
+                        const prev = $('icon-custom-preview');
+                        if (prev) prev.innerHTML = `<i class="${cls}"></i>`;
+                    }
+                });
+
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    copyIconIdToClipboard(cls);
+                    btn.classList.add('copied');
+                    setTimeout(() => btn.classList.remove('copied'), 400);
+
+                    grid.querySelectorAll('.icon-picker-item.selected').forEach(el => el.classList.remove('selected'));
+                    btn.classList.add('selected');
+
+                    if (activeEditingIconPath) {
+                        applySelectedIcon(cls);
+                    }
                 });
             });
         };
@@ -936,10 +1038,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!activeEditingIconPath) return;
             setPath(profileData[activeKey], activeEditingIconPath, iconClass);
             
-            // If editing mobility item that had svg, remove svg so the new icon shows
+            // If editing mobility item that had svg, check if restoring e-step or custom icon
             if (activeEditingIconPath.startsWith('mobility.items.')) {
                 const p = activeEditingIconPath.replace('.icon', '.svg');
-                setPath(profileData[activeKey], p, null);
+                if (iconClass === 'cv-icon-estep') {
+                    setPath(profileData[activeKey], p, '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="17" r="2"/><circle cx="6" cy="17" r="2"/><path d="M8 17h5a6 6 0 0 1 5 -5v-5a2 2 0 0 0 -2 -2h-1"/><path d="M10 4l-2 4h3l-2 4"/></svg>');
+                } else {
+                    setPath(profileData[activeKey], p, null);
+                }
             }
 
             commitData();
@@ -954,19 +1060,110 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cls = e.target.value.trim() || 'fa-solid fa-star';
                 const preview = $('icon-custom-preview');
                 if (preview) preview.innerHTML = `<i class="${cls}"></i>`;
+                updateHoverInspector(cls, 'Özel İkon', 'Özel');
             });
             customInputEl.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const val = customInputEl.value.trim();
-                    if (val) applySelectedIcon(val);
+                    if (!val) return;
+                    if (activeEditingIconPath) {
+                        applySelectedIcon(val);
+                    } else {
+                        copyIconIdToClipboard(val);
+                    }
                 }
             });
         }
 
         $('icon-custom-apply-btn')?.addEventListener('click', () => {
             const val = ($('icon-custom-input')?.value || '').trim();
-            if (val) applySelectedIcon(val);
+            if (!val) return;
+            if (activeEditingIconPath) {
+                applySelectedIcon(val);
+            } else {
+                copyIconIdToClipboard(val);
+            }
+        });
+
+        $('icon-inspector-copy-btn')?.addEventListener('click', () => {
+            if (window.currentInspectedIconCls) {
+                copyIconIdToClipboard(window.currentInspectedIconCls);
+            }
+        });
+
+        $('icon-hover-code')?.addEventListener('click', () => {
+            if (window.currentInspectedIconCls) {
+                copyIconIdToClipboard(window.currentInspectedIconCls);
+            }
+        });
+
+        // Reset icon(s) to factory defaults
+        $('icon-reset-default-btn')?.addEventListener('click', () => {
+            const rawDefault = (window.FACTORY_DEFAULTS && window.FACTORY_DEFAULTS[activeKey]) ||
+                               (window.CV_PROFILES_DATA && window.CV_PROFILES_DATA[activeKey]);
+            if (!rawDefault) {
+                window.showToast('Varsayılan profil verisi bulunamadı.', 'fa-solid fa-triangle-exclamation');
+                return;
+            }
+
+            if (activeEditingIconPath) {
+                // Reset this specific icon
+                const defIcon = getPath(rawDefault, activeEditingIconPath);
+                if (activeEditingIconPath.startsWith('mobility.items.')) {
+                    const svgPath = activeEditingIconPath.replace('.icon', '.svg');
+                    const defSvg = getPath(rawDefault, svgPath);
+                    setPath(profileData[activeKey], svgPath, defSvg || null);
+                }
+                setPath(profileData[activeKey], activeEditingIconPath, defIcon || 'fa-solid fa-star');
+                commitData();
+                renderCV();
+                window.hideIconPicker();
+                window.showToast('✨ İkon orijinal varsayılana sıfırlandı!', 'fa-solid fa-rotate-left');
+            } else {
+                // Reset all icons on the active CV page
+                const iconPaths = [
+                    'profile.icon', 'experience.icon', 'education.icon', 'skills.icon',
+                    'languages.icon', 'strengths.icon', 'waaromIk.icon', 'mobility.icon',
+                    'interests.icon', 'contact.icon'
+                ];
+                iconPaths.forEach(p => {
+                    const v = getPath(rawDefault, p);
+                    if (v !== undefined) setPath(profileData[activeKey], p, v);
+                });
+
+                // Mobility items
+                if (rawDefault.mobility && rawDefault.mobility.items && profileData[activeKey].mobility) {
+                    profileData[activeKey].mobility.items.forEach((item, idx) => {
+                        const orig = rawDefault.mobility.items[idx];
+                        if (orig) {
+                            item.icon = orig.icon;
+                            item.svg = orig.svg || null;
+                        }
+                    });
+                }
+
+                // WaaromIk items
+                if (rawDefault.waaromIk && rawDefault.waaromIk.items && profileData[activeKey].waaromIk) {
+                    profileData[activeKey].waaromIk.items.forEach((item, idx) => {
+                        const orig = rawDefault.waaromIk.items[idx];
+                        if (orig) item.icon = orig.icon;
+                    });
+                }
+
+                // Interests items
+                if (rawDefault.interests && rawDefault.interests.items && profileData[activeKey].interests) {
+                    profileData[activeKey].interests.items.forEach((item, idx) => {
+                        const orig = rawDefault.interests.items[idx];
+                        if (orig) item.icon = orig.icon;
+                    });
+                }
+
+                commitData();
+                renderCV();
+                window.hideIconPicker();
+                window.showToast('✨ Tüm ikonlar orijinal varsayılanlarına sıfırlandı!', 'fa-solid fa-rotate-left');
+            }
         });
 
         $('icon-search-input')?.addEventListener('input', (e) => {

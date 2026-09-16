@@ -2496,3 +2496,220 @@ body.edit-active [data-icon-path]:hover {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
+
+/* ==========================================================================
+   ICON HOVER INSPECTOR & QUICK COPY
+   ========================================================================== */
+.icon-hover-inspector {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: linear-gradient(135deg, rgba(212, 163, 89, 0.1), rgba(20, 20, 24, 0.6));
+    border: 1px solid rgba(212, 163, 89, 0.4);
+    border-radius: 10px;
+    padding: 9px 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.icon-inspector-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
+}
+
+.icon-inspector-preview {
+    width: 42px;
+    height: 42px;
+    border-radius: 9px;
+    background: rgba(212, 163, 89, 0.18);
+    border: 1px solid rgba(212, 163, 89, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: var(--accent);
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.icon-inspector-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.icon-inspector-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.icon-inspector-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.icon-inspector-badge {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    letter-spacing: 0.5px;
+}
+
+.icon-inspector-code-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.icon-inspector-code {
+    font-family: monospace;
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(212, 163, 89, 0.3);
+    color: #f6d365;
+    padding: 2px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: all;
+    transition: all 0.15s ease;
+}
+
+.icon-inspector-code:hover {
+    background: rgba(212, 163, 89, 0.25);
+    border-color: var(--accent);
+    color: #ffffff;
+}
+
+.icon-inspector-hint {
+    font-size: 10px;
+    color: var(--text-sub);
+    opacity: 0.85;
+}
+
+.icon-inspector-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(179, 139, 89, 0.3);
+}
+
+.icon-inspector-copy-btn:hover {
+    background: #c59b63;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(179, 139, 89, 0.45);
+}
+
+.icon-inspector-copy-btn:active {
+    transform: translateY(0);
+}
+
+/* Dedicated Icon List Buttons */
+.action-btn.highlight, #icon-catalog-btn {
+    background: linear-gradient(135deg, rgba(212, 163, 89, 0.22), rgba(179, 139, 89, 0.12)) !important;
+    border: 1px solid rgba(212, 163, 89, 0.55) !important;
+    color: #e6c280 !important;
+    font-weight: 700 !important;
+}
+
+.action-btn.highlight:hover, #icon-catalog-btn:hover {
+    background: linear-gradient(135deg, rgba(212, 163, 89, 0.4), rgba(179, 139, 89, 0.25)) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 12px rgba(212, 163, 89, 0.35) !important;
+}
+
+.pub-btn.icon-pub-btn {
+    background: linear-gradient(135deg, rgba(212, 163, 89, 0.22), rgba(179, 139, 89, 0.12)) !important;
+    border: 1px solid rgba(212, 163, 89, 0.55) !important;
+    color: #e6c280 !important;
+    font-weight: 700 !important;
+}
+
+.pub-btn.icon-pub-btn:hover {
+    background: linear-gradient(135deg, rgba(212, 163, 89, 0.4), rgba(179, 139, 89, 0.25)) !important;
+    color: #ffffff !important;
+}
+
+.icon-picker-item.copied {
+    animation: iconCopiedFlash 0.4s ease;
+    background: #16a34a !important;
+    color: #fff !important;
+    border-color: #16a34a !important;
+}
+
+@keyframes iconCopiedFlash {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.25); }
+    100% { transform: scale(1); }
+}
+
+/* ==========================================================================
+   CUSTOM E-STEP SCOOTER & RESET ICON STYLES
+   ========================================================================== */
+.cv-icon-estep {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    vertical-align: -0.125em;
+    width: 1.15em;
+    height: 1.15em;
+    position: relative;
+}
+
+.cv-icon-estep::before {
+    content: '';
+    display: inline-block;
+    width: 100%;
+    height: 100%;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='18' cy='17' r='2'/%3E%3Ccircle cx='6' cy='17' r='2'/%3E%3Cpath d='M8 17h5a6 6 0 0 1 5 -5v-5a2 2 0 0 0 -2 -2h-1'/%3E%3Cpath d='M10 4l-2 4h3l-2 4'/%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='18' cy='17' r='2'/%3E%3Ccircle cx='6' cy='17' r='2'/%3E%3Cpath d='M8 17h5a6 6 0 0 1 5 -5v-5a2 2 0 0 0 -2 -2h-1'/%3E%3Cpath d='M10 4l-2 4h3l-2 4'/%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+.icon-reset-default-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    background: rgba(234, 179, 8, 0.12);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.4);
+    transition: all 0.2s ease;
+}
+
+.icon-reset-default-btn:hover {
+    background: rgba(234, 179, 8, 0.25);
+    border-color: #eab308;
+    color: #fde047;
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.25);
+}
+

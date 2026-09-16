@@ -31,11 +31,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css?v=2.6">
-    <script src="assets/icons_data.js?v=2.6"></script>
-    <script src="config/config.js?v=2.6"></script>
-    <script src="config/users/boekhoudkundigassistent.js?v=2.6"></script>
-    <script src="config/users/student.js?v=2.6"></script>
+    <link rel="stylesheet" href="style.css?v=2.7">
+    <script src="assets/icons_data.js?v=2.7"></script>
+    <script src="config/config.js?v=2.7"></script>
+    <script src="config/users/boekhoudkundigassistent.js?v=2.7"></script>
+    <script src="config/users/student.js?v=2.7"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
@@ -187,6 +187,9 @@
     <button id="revert-draft-btn" class="pub-btn revert-btn" data-tooltip="Taslağı Sil ve Canlı Sürüme Dön" onclick="window.revertDraft()">
         <i class="fa-solid fa-rotate-left"></i> <span>İptal / Vazgeç</span>
     </button>
+    <button id="icon-catalog-pub-btn" class="pub-btn icon-pub-btn" data-tooltip="1400+ İkon Listesi &amp; ID Kopyala" onclick="window.showIconCatalog()">
+        <i class="fa-solid fa-icons"></i> <span>İkon Listesi</span>
+    </button>
     <button id="publish-btn" class="pub-btn publish-btn" data-tooltip="Değişiklikleri MySQL ve Canlı Siteye Kaydet" onclick="window.publishEdits()">
         <i class="fa-solid fa-cloud-arrow-up"></i> <span>Değişiklikleri Kaydet &amp; Yayınla</span>
     </button>
@@ -247,7 +250,14 @@
         </button>
     </div>
 
-    
+    <div class="action-divider divider-edit" style="display: none;"></div>
+
+    <div class="action-group group-edit" style="display: none;">
+        <button id="icon-catalog-btn" class="action-btn highlight" data-tooltip="1400+ İkon Listesi &amp; ID Kopyala" onclick="window.showIconCatalog()">
+            <i class="fa-solid fa-icons"></i> <span>İkon Listesi</span>
+        </button>
+    </div>
+
     <div class="action-divider"></div>
 
     
@@ -470,24 +480,46 @@
     <!-- Icon Picker Modal -->
     <div id="icon-picker-modal" class="custom-modal icon-picker-modal" style="display: none;">
         <div class="icon-picker-header">
-            <h3 class="icon-picker-title"><i class="fa-solid fa-icons"></i> İkon Değiştir</h3>
+            <h3 class="icon-picker-title"><i class="fa-solid fa-icons"></i> İkon Listesi &amp; ID Kopyala</h3>
             <button type="button" class="icon-picker-close-x" onclick="window.hideIconPicker()">&times;</button>
         </div>
-        <p class="icon-picker-subtitle">Sayfadaki ikonu 1400+ zengin listeden seçebilir, arayabilir veya özel FontAwesome sınıfı yazabilirsiniz.</p>
+        <p class="icon-picker-subtitle">İkonların üzerine gelerek anında ID'lerini görebilir, tıklayarak panoya kopyalayabilir veya sayfadaki ikonu değiştirebilirsiniz.</p>
+
+        <!-- Live Hover Inspector & Copy Bar -->
+        <div class="icon-hover-inspector" id="icon-hover-inspector">
+            <div class="icon-inspector-left">
+                <div class="icon-inspector-preview" id="icon-hover-preview">
+                    <i class="fa-solid fa-icons"></i>
+                </div>
+                <div class="icon-inspector-info">
+                    <div class="icon-inspector-title-row">
+                        <span class="icon-inspector-name" id="icon-hover-name">Bir ikonun üzerine gelin</span>
+                        <span class="icon-inspector-badge" id="icon-hover-cat">Katalog</span>
+                    </div>
+                    <div class="icon-inspector-code-row">
+                        <code class="icon-inspector-code" id="icon-hover-code" title="Tıkla ve Panoya Kopyala">fa-solid fa-icons</code>
+                        <span class="icon-inspector-hint"><i class="fa-solid fa-hand-pointer"></i> Tıkla = Kopyala</span>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="icon-inspector-copy-btn" id="icon-inspector-copy-btn" title="İkon ID'sini Panoya Kopyala">
+                <i class="fa-regular fa-copy"></i> <span>ID Kopyala</span>
+            </button>
+        </div>
 
         <div class="icon-picker-custom-box">
-            <label><i class="fa-solid fa-terminal"></i> Özel FontAwesome Sınıfı Girin:</label>
+            <label><i class="fa-solid fa-terminal"></i> Özel FontAwesome Sınıfı Girin / Seçin:</label>
             <div class="icon-custom-input-row">
                 <div class="icon-live-preview" id="icon-custom-preview"><i class="fa-solid fa-star"></i></div>
                 <input type="text" id="icon-custom-input" placeholder="Örn: fa-solid fa-rocket veya fa-brands fa-github" />
-                <button type="button" id="icon-custom-apply-btn" class="modal-btn primary">Uygula</button>
+                <button type="button" id="icon-custom-apply-btn" class="modal-btn primary">Kopyala / Uygula</button>
             </div>
         </div>
 
         <div class="icon-picker-search-bar">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text" id="icon-search-input" placeholder="İkon ara... (örn: phone, code, car, school, star)" autocomplete="off" />
-            <span id="icon-search-count" class="icon-count-badge">1400+</span>
+            <span id="icon-search-count" class="icon-count-badge">2000+</span>
         </div>
 
         <div class="icon-picker-categories" id="icon-categories-tabs">
@@ -496,18 +528,21 @@
 
         <div class="icon-picker-grid-wrap">
             <div class="icon-picker-grid" id="icon-picker-grid">
-                <!-- 1400+ icons rendered here -->
+                <!-- 2000+ icons rendered here -->
             </div>
         </div>
 
-        <div class="modal-buttons" style="margin-top: 14px;">
-            <button type="button" class="modal-btn secondary" onclick="window.hideIconPicker()">Vazgeç</button>
+        <div class="modal-buttons" style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <button type="button" id="icon-reset-default-btn" class="icon-reset-default-btn" title="Bu ikonu veya CV ikonlarını orijinal varsayılan haline döndür">
+                <i class="fa-solid fa-rotate-left"></i> <span>Varsayılana Sıfırla</span>
+            </button>
+            <button type="button" class="modal-btn secondary" onclick="window.hideIconPicker()">Kapat</button>
         </div>
     </div>
 </div>
 </div>
 
-<script src="script.js?v=2.6"></script>
+<script src="script.js?v=2.7"></script>
 
 </body>
 </html>
