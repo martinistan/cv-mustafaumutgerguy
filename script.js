@@ -1,0 +1,1116 @@
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof CV_CONFIG === 'undefined') return;
+    const $ = id => document.getElementById(id);
+
+    const startApp = () => {
+        const getProfileFromHash = () => {
+            const h = (window.location.hash || '').toLowerCase();
+            if (h === '#student') return 'student';
+            if (h === '#bk' || h === '#boekhouder' || h === '#boekhoudkundigassistent') return 'boekhoudkundigassistent';
+            return null;
+        };
+
+        const syncHashWithProfile = (key) => {
+            const targetHash = (key === 'student') ? '#student' : '#bk';
+            if (window.location.hash !== targetHash) {
+                history.replaceState(null, '', targetHash);
+            }
+        };
+
+        const hashProfile = getProfileFromHash();
+        let activeKey = hashProfile || localStorage.getItem('activeProfile') || CV_CONFIG.activeProfile || 'boekhoudkundigassistent';
+        if (activeKey === 'umut') {
+            activeKey = 'boekhoudkundigassistent';
+            localStorage.setItem('activeProfile', activeKey);
+        }
+        const baseProfiles = window.CV_PROFILES_DATA || {};
+        
+        let liveData = JSON.parse(localStorage.getItem('cv_profiles')) || {};
+        let draftData = JSON.parse(localStorage.getItem('cv_profiles_draft'));
+
+        Object.keys(baseProfiles).forEach(k => { 
+            liveData[k] = baseProfiles[k]; 
+            if (draftData) draftData[k] = JSON.parse(JSON.stringify(baseProfiles[k]));
+        });
+
+        if (!draftData) { 
+            draftData = JSON.parse(JSON.stringify(liveData)); 
+            localStorage.setItem('cv_profiles_draft', JSON.stringify(draftData)); 
+        }
+        
+        let editMode = localStorage.getItem('cv_edit_mode') === 'true';
+        let showHidden = localStorage.getItem('cv_show_hidden') === 'true';
+        let profileData = editMode ? draftData : liveData;
+        
+        if (!profileData[activeKey]) activeKey = Object.keys(profileData).find(k => k !== 'umut') || 'boekhoudkundigassistent';
+
+        const getDisplayName = (key) => {
+            if (key === 'boekhoudkundigassistent') return 'Boekhoudkundig Assistent';
+            if (key === 'student') return 'Student';
+            return key.charAt(0).toUpperCase() + key.slice(1);
+        };
+
+        let historyStack=[]; let historyPointer=-1; let isUndoingRedoing=false;
+        const pushHistory=()=>{if(isUndoingRedoing)return;const d=JSON.stringify(profileData);if(historyPointer<historyStack.length-1)historyStack=historyStack.slice(0,historyPointer+1);historyStack.push(d);if(historyStack.length>50)historyStack.shift();historyPointer=historyStack.length-1;updateHistoryUI();};
+        const initHistory=()=>{historyStack=[JSON.stringify(profileData)];historyPointer=0;updateHistoryUI();};
+        const updateHistoryUI=()=>{const u=$('undo-btn'),r=$('redo-btn');if(!u||!r)return;u.disabled=historyPointer<=0;u.style.opacity=u.disabled?'0.4':'1';r.disabled=historyPointer>=historyStack.length-1;r.style.opacity=r.disabled?'0.4':'1';};
+        
+        let autoDutchFix = localStorage.getItem('cv_auto_dutch_fix') !== 'false';
+        const cleanDutchChars = (text) => {
+            if (typeof text !== 'string') return text;
+            return text.replace(/İ/g, 'I').replace(/ı/g, 'i');
+        };
+        const deepCleanDutch = (obj) => {
+            if (!obj) return obj;
+            if (typeof obj === 'string') return cleanDutchChars(obj);
+            if (Array.isArray(obj)) return obj.map(deepCleanDutch);
+            if (typeof obj === 'object') {
+                const res = {};
+                for (const k of Object.keys(obj)) {
+                    res[k] = deepCleanDutch(obj[k]);
+                }
+                return res;
+            }
+            return obj;
+        };
+
+        const syncCurrentStateToStorage=()=>{
+            if(editMode){draftData=profileData;localStorage.setItem('cv_profiles_draft',JSON.stringify(draftData));}
+            else{liveData=profileData;localStorage.setItem('cv_profiles',JSON.stringify(liveData));}
+        };
+        const commitData=()=>{
+            if (editMode && autoDutchFix && profileData && profileData[activeKey]) {
+                profileData[activeKey] = deepCleanDutch(profileData[activeKey]);
+            }
+            syncCurrentStateToStorage();
+            pushHistory();
+        };
+
+        window.appUndo=()=>{if(historyPointer>0){isUndoingRedoing=true;historyPointer--;profileData=JSON.parse(historyStack[historyPointer]);syncCurrentStateToStorage();renderCV();updateHistoryUI();isUndoingRedoing=false;}};
+        window.appRedo=()=>{if(historyPointer<historyStack.length-1){isUndoingRedoing=true;historyPointer++;profileData=JSON.parse(historyStack[historyPointer]);syncCurrentStateToStorage();renderCV();updateHistoryUI();isUndoingRedoing=false;}};
+        
+        window.publishEdits=()=>{if(confirm('Taslak yayınlansın mı?')){liveData=JSON.parse(JSON.stringify(draftData));localStorage.setItem('cv_profiles',JSON.stringify(liveData));alert('Yayınlandı! 🚀');}};
+        window.revertDraft=()=>{if(confirm('Geri dönsün mü?')){draftData=JSON.parse(JSON.stringify(liveData));localStorage.setItem('cv_profiles_draft',JSON.stringify(draftData));profileData=draftData;initHistory();renderCV();}};
+        
+        window.addNewProfile = () => {
+            const name = prompt("Yeni profil adı (Örn: ahmet):");
+            if (!name) return;
+            const key = name.toLowerCase().replace(/\s+/g, '_');
+            if (profileData[key]) { alert("Bu isimde bir profil zaten var!"); return; }
+            profileData[key] = JSON.parse(JSON.stringify(profileData[activeKey]));
+            profileData[key].profile.firstName = name; profileData[key].profile.lastName = "";
+            commitData(); activeKey = key; localStorage.setItem('activeProfile', activeKey); renderCV();
+        };
+
+        window.deleteCurrentProfile = () => {
+            if (Object.keys(profileData).length <= 1) { alert("Son profili silemezsiniz!"); return; }
+            if (confirm(`${activeKey} profilini silmek istediğinize emin misiniz?`)) {
+                delete profileData[activeKey]; activeKey = Object.keys(profileData)[0];
+                localStorage.setItem('activeProfile', activeKey); commitData(); renderCV();
+            }
+        };
+        
+        window.exportProfileJS = () => {
+            const data = profileData[activeKey];
+            const content = `window.CV_PROFILES_DATA = window.CV_PROFILES_DATA || {};\nwindow.CV_PROFILES_DATA.${activeKey} = ${JSON.stringify(data, null, 4)};`;
+            const blob = new Blob([content], {type: "text/javascript"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `${activeKey}.js`; a.click();
+            alert(`Dosya indirildi: ${activeKey}.js\nBu dosyayı config/users/ klasörüne atarak kalıcı hale getirebilirsiniz.`);
+        };
+
+        const starsHtml=(val)=>Array.from({length:3},(_,i)=>{let c=val>=i+1?'fa-solid fa-star':(val>=i+0.5?'fa-solid fa-star-half-stroke':'fa-regular fa-star');return `<i class="${c}" style="font-size:8px;color:var(--accent);margin-right:1.5px;width:8px;"></i>`;}).join('');
+        const setPath=(obj,path,value)=>{
+            const p=path.split('.');let c=obj;for(let i=0;i<p.length-1;i++){if(!c[p[i]])c[p[i]]={};c=c[p[i]];}c[p[p.length-1]]=value;
+        };
+        const toggleSec=(cfg,id)=>{
+            const el=$(id);if(!el)return;const isV=(cfg&&cfg.visible!==false);const show=isV||(editMode&&showHidden);el.style.display=show?'block':'none';
+            const row=el.closest('[class^="grid-row-"]');
+            if(row){
+                const secs=Array.from(row.children).filter(s=>s.tagName==='SECTION');const vis=secs.filter(s=>s.style.display!=='none');
+                row.style.display=vis.length>0?'grid':'none';
+                if(vis.length===1){row.classList.add('single-column');row.style.gridTemplateColumns='100%';}
+                else{row.classList.remove('single-column');row.style.gridTemplateColumns='50% 50%';}
+            }
+        };
+
+        const addSectionControls=(key,id)=>{
+            const sec=$(id);if(!sec)return;const ex=sec.querySelector('.section-edit-actions');if(ex)ex.remove();
+            const C=profileData[activeKey];const cfg=C[key]||{visible:false};if(!editMode)return;
+            const actions=document.createElement('div');actions.className='section-edit-actions no-print';
+            const hideBtn=document.createElement('button');hideBtn.className=`section-edit-btn ${!cfg.visible?'active':''}`;
+            hideBtn.innerHTML=cfg.visible?`<i class="fa-solid fa-eye-slash"></i>`:`<i class="fa-solid fa-eye"></i>`;
+            hideBtn.onclick=(e)=>{e.stopPropagation();cfg.visible=!cfg.visible;commitData();renderCV();};
+            actions.appendChild(hideBtn);
+            if(key==='werkervaring'||key.startsWith('extra')){
+                const typeBtn=document.createElement('button');typeBtn.className='section-edit-btn';typeBtn.innerHTML=`<i class="fa-solid fa-boxes-stacked"></i>`;
+                typeBtn.onclick=(e)=>{e.stopPropagation();const types=['text','items','skills','stars'];let idx=types.indexOf(cfg.type||'text');cfg.type=types[(idx+1)%types.length];if((cfg.type==='items'||cfg.type==='skills'||cfg.type==='stars')&&!Array.isArray(cfg.items))cfg.items=[{year:"2026",school:"YENİ",desc:"AÇIKLAMA",name:"YENİ",badge:"İYİ",stars:3}];commitData();renderCV();};
+                actions.appendChild(typeBtn);
+            }
+            if(cfg.items&&Array.isArray(cfg.items)){
+                const addBtn=document.createElement('button');addBtn.className='section-edit-btn';addBtn.innerHTML=`<i class="fa-solid fa-plus"></i>`;
+                addBtn.onclick=(e)=>{e.stopPropagation();if(key==='softSkills'||key==='languages')cfg.items.push({name:"YENİ",badge:"İYİ",stars:3});else cfg.items.push({year:"2026",school:"YENİ",desc:"DESC"});commitData();renderCV();};
+                actions.appendChild(addBtn);
+                const rmBtn=document.createElement('button');rmBtn.className='section-edit-btn';rmBtn.innerHTML=`<i class="fa-solid fa-minus"></i>`;
+                rmBtn.onclick=(e)=>{e.stopPropagation();if(cfg.items.length>0){cfg.items.pop();commitData();renderCV();}};
+                actions.appendChild(rmBtn);
+            }
+            sec.appendChild(actions);
+        };
+
+        const renderSectionTitle=(cfg,id,icon)=>{const t=$(id+'-title');if(!t)return;if(!cfg.title){t.style.display='none';return;}t.style.display='flex';t.innerHTML=`<i class="fa-solid ${icon}"></i> <span data-path="${id.replace('-sec','')}.title">${cfg.title}</span>`;};
+
+        const renderCV=()=>{
+            const C=profileData[activeKey];if(!C)return;
+            syncHashWithProfile(activeKey);
+            const r=document.documentElement.style;
+            r.setProperty('--accent',C.theme.accent);r.setProperty('--accent-dim',C.theme.accentDim);
+            r.setProperty('--accent-bg',C.theme.accentBg);r.setProperty('--accent-text',C.theme.accentText);
+            const container=document.querySelector('.cv-container');
+            container.className = 'cv-container theme-' + activeKey;
+            $('first-name').textContent=C.profile.firstName.toUpperCase();$('last-name').textContent=C.profile.lastName.toUpperCase();
+            $('first-name').setAttribute('data-path','profile.firstName');$('last-name').setAttribute('data-path','profile.lastName');
+
+            if ($('role-subtitle')) {
+                const sub = C.profile.subtitle || (activeKey === 'student' ? 'Student' : 'Boekhoudkundig Assistent');
+                $('role-subtitle').textContent = sub.toUpperCase();
+                $('role-subtitle').setAttribute('data-path', 'profile.subtitle');
+                $('role-subtitle').style.display = sub ? 'block' : 'none';
+            }
+
+            const toggleBtn = $('profile-toggle');
+            if (toggleBtn) {
+                const span = $('current-profile-name') || toggleBtn.querySelector('span');
+                if (span) span.textContent = `Sayfa: ${getDisplayName(activeKey)}`;
+            }
+
+            const dlHeaderLabel = $('dl-header-label');
+            if (dlHeaderLabel) {
+                dlHeaderLabel.textContent = `${getDisplayName(activeKey).toUpperCase()} (DOKÜMAN & PDF)`;
+            }
+            const dlPdf = $('dl-umut-pdf');
+            if (dlPdf) {
+                const pdfName = (activeKey === 'student') ? 'Mustafa_Umut_Gerguy_student_cv.pdf' : 'Mustafa_Umut_Gerguy_cv.pdf';
+                dlPdf.href = pdfName;
+                dlPdf.download = pdfName;
+            }
+            const dlPng = $('dl-umut-png');
+            if (dlPng) {
+                const pngName = (activeKey === 'student') ? 'Mustafa_Umut_Gerguy_student_cv.png' : 'Mustafa_Umut_Gerguy_cv.png';
+                dlPng.href = pngName;
+                dlPng.download = pngName;
+            }
+
+            const contactInfo=document.querySelector('.contact-info');contactInfo.innerHTML='';
+            const CL = C.contactLabels || {phone:"GSM", email:"E-MAIL", address:"ADRES", birth:"GEBOORTE", drivingLicense:"RIJBEWIJS", nationality:"NATIONALITEIT"};
+            if(editMode){
+                const addBtns=document.createElement('div');addBtns.className='sidebar-add-btns no-print';
+                addBtns.innerHTML=`<button onclick="window.addContactRow('phone')">+ ${CL.phone}</button><button onclick="window.addContactRow('email')">+ ${CL.email}</button><button onclick="window.addContactRow('address')">+ ${CL.address}</button><button onclick="window.addContactRow('birth')">+ ${CL.birth||'GEBOORTE'}</button><button onclick="window.addContactRow('drivingLicense')">+ ${CL.drivingLicense||'RIJBEWIJS'}</button><button onclick="window.addContactRow('nationality')">+ ${CL.nationality||'NATIONALITEIT'}</button>`;
+                contactInfo.appendChild(addBtns);
+            }
+            const addContactRow=(icon,value,path,href,canRemove,label,labelPath,isFieldVisible,visKey)=>{
+                const isVisible = (isFieldVisible !== false);
+                if(!value && !editMode) return; 
+                if(!isVisible && !editMode) return;
+
+                const row=document.createElement('div');
+                row.className='contact-row'; row.style.padding = '3px 0';
+                if(!isVisible && editMode){
+                    row.style.opacity = '0.55';
+                    row.style.border = '1px dashed var(--accent-dim)';
+                    row.style.borderRadius = '3px';
+                    row.style.padding = '2px 4px';
+                }
+                row.innerHTML=`<div class="contact-header" style="gap:4px; display:flex; align-items:center; width:100%;">
+                    <i class="fa-solid ${icon}" style="width:8px;"></i>
+                    <div class="contact-label" style="font-size:6.5px;" ${editMode?`data-path="${labelPath}"`:''}>${label}</div>
+                    ${editMode && visKey ? `
+                        <button class="contact-toggle-vis no-print" onclick="window.toggleContactVisibility('${visKey}')" title="${isVisible?'Gizle':'Göster'}" style="margin-left:auto; background:none; border:none; color:var(--accent); cursor:pointer; font-size:7px; opacity:0.85; padding:0 2px;">
+                            <i class="fa-solid ${isVisible?'fa-eye':'fa-eye-slash'}"></i>
+                        </button>
+                    `:''}
+                </div>
+                <div class="contact-body" style="gap:4px;">
+                    <span class="contact-divider-vertical" style="font-size:8px;">|</span>
+                    <div class="contact-value" style="font-size:7px; white-space: nowrap;"><span data-path="${path}">${value||'...'}</span></div>
+                </div>
+                ${editMode&&canRemove?`<button class="sidebar-row-rm no-print" onclick="window.removeContactRow('${path}')" style="margin-left:auto;"><i class="fa-solid fa-trash" style="font-size:6px;"></i></button>`:''}`;
+                contactInfo.appendChild(row);
+            };
+            const cd=C.contact;
+            if(cd.phone) addContactRow('fa-phone',cd.phone,'contact.phone',null,false,CL.phone, 'contactLabels.phone');
+            Object.keys(cd).filter(k=>k.startsWith('phone') && k!=='phone').forEach(k=>{
+                const n=k.replace('phone','');
+                addContactRow('fa-phone',cd[k],'contact.'+k,null,true,CL.phone + ' ' + n, 'contactLabels.phone');
+            });
+            if(cd.email) addContactRow('fa-envelope',cd.email,'contact.email',null,false,CL.email, 'contactLabels.email');
+            Object.keys(cd).filter(k=>k.startsWith('email') && k!=='email').forEach(k=>{
+                const n=k.replace('email','');
+                addContactRow('fa-envelope',cd[k],'contact.'+k,null,true,CL.email + ' ' + n, 'contactLabels.email');
+            });
+            if(cd.street) {
+                const fullAddr = `${cd.street}, ${cd.zip ? cd.zip + ' ' : ''}${cd.city||''}`;
+                addContactRow('fa-location-dot', fullAddr, 'contact.street', null, false, CL.address, 'contactLabels.address');
+            }
+            Object.keys(cd).filter(k=>k.startsWith('street') && k!=='street').forEach(k=>{
+                const n=k.replace('street','');
+                addContactRow('fa-location-dot',`${cd[k]}, ${cd['zip'+n] ? cd['zip'+n]+' ' : ''}${cd['city'+n]||''}`,'contact.'+k,null,true,CL.address + ' ' + n, 'contactLabels.address');
+            });
+            if(cd.birth) addContactRow('fa-calendar-days', cd.birth, 'contact.birth', null, false, CL.birth || 'GEBOORTE', 'contactLabels.birth', cd.birthVisible, 'birthVisible');
+            if(cd.drivingLicense) addContactRow('fa-id-card', cd.drivingLicense, 'contact.drivingLicense', null, false, CL.drivingLicense || 'RIJBEWIJS', 'contactLabels.drivingLicense', cd.drivingLicenseVisible, 'drivingLicenseVisible');
+            if(cd.nationality) addContactRow('fa-flag', cd.nationality, 'contact.nationality', null, false, CL.nationality || 'NATIONALITEIT', 'contactLabels.nationality', cd.nationalityVisible, 'nationalityVisible');
+
+            window.toggleContactVisibility = (visKey) => {
+                const contactData = profileData[activeKey].contact;
+                contactData[visKey] = (contactData[visKey] === false) ? true : false;
+                commitData();
+                renderCV();
+            };
+
+            window.toggleCompanyPlaceholder = () => {
+                const sb = profileData[activeKey].sollicitatiebrief;
+                if (sb) {
+                    sb.companyPlaceholderVisible = !sb.companyPlaceholderVisible;
+                    commitData();
+                    renderCV();
+                }
+            };
+
+            window.addContactRow=(type)=>{
+                if(type==='phone'){let n=2;while(cd['phone'+n])n++;cd['phone'+n]="+32 ...";}
+                else if(type==='email'){let n=2;while(cd['email'+n])n++;cd['email'+n]="...@gmail.com";}
+                else if(type==='address'){let n=2;while(cd['street'+n])n++;cd['street'+n]="Straat...";cd['zip'+n]="9000";cd['city'+n]="Gent";}
+                else if(type==='birth'){cd.birth="18/05/2008"; cd.birthVisible=true;}
+                else if(type==='drivingLicense'){cd.drivingLicense="Rijbewijs B"; cd.drivingLicenseVisible=true;}
+                else if(type==='nationality'){cd.nationality="Belg"; cd.nationalityVisible=true;}
+                commitData();renderCV();
+            };
+            window.removeContactRow=(path)=>{const key=path.replace('contact.','');delete cd[key];if(key.startsWith('street')){const n=key.replace('street','');delete cd['zip'+n];delete cd['city'+n];}commitData();renderCV();};
+
+            const mobCfg = C.mobility;
+            const mobSec = $('sidebar-mobility-sec');
+            if (mobSec) {
+                const isMobVis = mobCfg && mobCfg.visible !== false;
+                mobSec.style.display = (isMobVis || (editMode && showHidden)) ? 'block' : 'none';
+                const mobTitle = $('sidebar-mobility-title');
+                if (mobTitle && mobCfg) {
+                    mobTitle.textContent = mobCfg.title || "MOBILITEIT";
+                }
+                const mobList = $('sidebar-mobility-list');
+                if (mobList && mobCfg && mobCfg.items) {
+                    mobList.innerHTML = '';
+                    mobCfg.items.forEach((item, idx) => {
+                        const el = document.createElement('div');
+                        el.className = 'sidebar-mobility-col';
+                        const iconMarkup = item.svg ? item.svg : `<i class="${item.icon || 'fa-solid fa-circle-check'}"></i>`;
+                        el.innerHTML = `
+                            ${iconMarkup}
+                            <span class="sidebar-mobility-name" ${editMode ? `data-path="mobility.items.${idx}.name"` : ''}>${item.name}</span>
+                        `;
+                        mobList.appendChild(el);
+                    });
+                }
+            }
+
+            const intCfg = C.interests;
+            const intSec = $('sidebar-interests-sec');
+            if (intSec) {
+                const isIntVis = intCfg && intCfg.visible !== false;
+                intSec.style.display = (isIntVis || (editMode && showHidden)) ? 'block' : 'none';
+                const intTitle = $('sidebar-interests-title');
+                if (intTitle && intCfg) {
+                    intTitle.textContent = intCfg.title || "INTERESSES & HOBBY'S";
+                }
+                const intList = $('sidebar-interests-list');
+                if (intList && intCfg && intCfg.items) {
+                    intList.innerHTML = '';
+                    intCfg.items.forEach((item, idx) => {
+                        const el = document.createElement('div');
+                        el.className = 'sidebar-interest-col';
+                        el.innerHTML = `
+                            <i class="${item.icon || 'fa-solid fa-star'}"></i>
+                            <span class="sidebar-interest-name" ${editMode ? `data-path="interests.items.${idx}.name"` : ''}>${item.name}</span>
+                        `;
+                        intList.appendChild(el);
+                    });
+                }
+            }
+
+            $('sidebar-footer').textContent=C.footer.text;$('sidebar-footer').setAttribute('data-path','footer.text');
+            if(C.overMezelf){toggleSec(C.overMezelf,'over-mezelf-sec');renderSectionTitle(C.overMezelf,'over-mezelf','fa-user-tie');$('over-mezelf-text').textContent=C.overMezelf.text;$('over-mezelf-text').setAttribute('data-path','overMezelf.text');}
+            if(C.werkervaring){
+                toggleSec(C.werkervaring,'werkervaring-sec');
+                renderSectionTitle(C.werkervaring,'werkervaring','fa-briefcase');
+                const wvList=$('werkervaring-list');
+                if(wvList){
+                    wvList.innerHTML='';
+                    if(C.werkervaring.type==='items'&&C.werkervaring.items){
+                        C.werkervaring.items.forEach((item,index)=>{
+                            const el=document.createElement('div');
+                            el.className='edu-card';
+                            el.innerHTML=`
+                                <div class="edu-card-header">
+                                    <div class="edu-card-title-group">
+                                        ${item.logo ? `<img src="${item.logo}" alt="${item.school}" class="exp-company-logo">` : ''}
+                                        <span class="edu-school" data-path="werkervaring.items.${index}.school">${item.school}</span>
+                                    </div>
+                                    <span class="edu-year-badge" data-path="werkervaring.items.${index}.year"><i class="fa-solid fa-calendar-days"></i> ${item.year}</span>
+                                </div>
+                                <div class="edu-desc" data-path="werkervaring.items.${index}.desc">${item.desc}</div>`;
+                            wvList.appendChild(el);
+                        });
+                    } else if(C.werkervaring.text){
+                        const el=document.createElement('div');
+                        el.className='edu-card edu-card-text text-content';
+                        el.setAttribute('data-path','werkervaring.text');
+                        el.textContent=C.werkervaring.text;
+                        wvList.appendChild(el);
+                    }
+                }
+            }
+            if(C.education){
+                toggleSec(C.education,'education-sec');
+                renderSectionTitle(C.education,'education','fa-graduation-cap');
+                const eduList=$('education-list');
+                eduList.innerHTML='';
+                (C.education.items||[]).forEach((item,index)=>{
+                    const el=document.createElement('div');
+                    el.className='edu-card';
+                    const yearOnly=(item.year||'').replace(/\((gestopt|Gestopt met school)\)/gi,'').trim();
+                    const hasGestopt=/\((gestopt|Gestopt met school)\)/gi.test(item.year||'');
+                    el.innerHTML=`
+                        <div class="edu-card-header">
+                            <span class="edu-school" data-path="education.items.${index}.school">${item.school}</span>
+                            <span class="edu-year-badge" data-path="education.items.${index}.year"><i class="fa-solid fa-calendar-days"></i> ${yearOnly} ${hasGestopt?'<span class="gestopt-label">(Gestopt)</span>':''}</span>
+                        </div>
+                        ${item.desc?`<div class="edu-desc" data-path="education.items.${index}.desc">${item.desc}</div>`:''}`;
+                    eduList.appendChild(el);
+                });
+            }
+            if(C.softSkills){toggleSec(C.softSkills,'soft-skills-sec');renderSectionTitle(C.softSkills,'soft-skills','fa-lightbulb');const softList=$('soft-skills-list');softList.innerHTML='';C.softSkills.items.forEach((item,index)=>{if(!item.name)return;const el=document.createElement('div');el.className='skill-item-row';el.innerHTML=`<span class="skill-name" data-path="softSkills.items.${index}.name">${item.name}</span><span class="skill-badge" data-path="softSkills.items.${index}.badge">${item.badge}</span>`;softList.appendChild(el);});}
+            if(C.languages){toggleSec(C.languages,'languages-sec');renderSectionTitle(C.languages,'languages','fa-globe');const langList=$('languages-list');langList.innerHTML='';C.languages.items.forEach((item,index)=>{if(!item.name)return;const el=document.createElement('div');el.className='lang-item-row';el.innerHTML=`<span class="lang-name" data-path="languages.items.${index}.name">${item.name}</span><div class="stars-row ${editMode?'editable-stars':''}" data-stars-path="languages.items.${index}.stars">${starsHtml(item.stars)}</div><span class="lang-badge skill-badge" data-path="languages.items.${index}.badge">${item.badge}</span>`;langList.appendChild(el);});}
+            const handleExtra=(key,id)=>{
+                const cfg=C[key];if(!cfg)return;
+                toggleSec(cfg,id+'-sec');
+                const icon = cfg.icon || (cfg.title && (cfg.title.toLowerCase().includes('software') || cfg.title.toLowerCase().includes('it')) ? 'fa-laptop-code' : 'fa-star');
+                renderSectionTitle(cfg,id,icon);
+                const cnt=$(id+'-content');cnt.innerHTML='';
+                if(cfg.type==='text'){
+                    cnt.innerHTML=`<p class="text-content" data-path="${key}.text">${cfg.text}</p>`;
+                } else if(cfg.type==='items'&&cfg.items){
+                    cfg.items.forEach((item,idx)=>{
+                        const el=document.createElement('div');el.className='edu-item';
+                        el.innerHTML=`<div class="experience-header" style="display:flex;align-items:baseline;gap:4px;margin-bottom:4px;width:100%;"><span class="edu-school" data-path="${key}.items.${idx}.school" style="font-size:7.8px;font-weight:800;color:var(--text-main);text-transform:uppercase;white-space:nowrap;">${item.school}</span><span style="color:var(--accent-text);font-size:8px;font-weight:800;opacity:0.5;">|</span><span class="edu-year" data-path="${key}.items.${idx}.year" style="font-size:7.8px;font-weight:700;color:var(--accent-text);white-space:nowrap;"><i class="fa-solid fa-calendar-days" style="font-size:7px;"></i> ${item.year}</span></div><div class="experience-address" data-path="${key}.items.${idx}.desc" style="font-size:8.5px;font-weight:500;color:var(--text-sub);">${item.desc}</div>`;
+                        cnt.appendChild(el);
+                    });
+                } else if(cfg.type==='skills'&&cfg.items){
+                    const grid=document.createElement('div');
+                    grid.className='skills-grid-2col';
+                    cfg.items.forEach((item,idx)=>{
+                        if(!item.name) return;
+                        const el=document.createElement('div');
+                        el.className='skill-item-row';
+                        el.innerHTML=`<span class="skill-name" data-path="${key}.items.${idx}.name">${item.name}</span><span class="skill-badge" style="width: auto !important; min-width: 34px; padding: 0 4px;" data-path="${key}.items.${idx}.badge">${item.badge}</span>`;
+                        grid.appendChild(el);
+                    });
+                    cnt.appendChild(grid);
+                } else if(cfg.type==='stars'&&cfg.items){
+                    const list=document.createElement('div');
+                    list.className='skills-list';
+                    cfg.items.forEach((item,idx)=>{
+                        if(!item.name) return;
+                        const el=document.createElement('div');
+                        el.className='lang-item-row';
+                        el.innerHTML=`<span class="lang-name" data-path="${key}.items.${idx}.name">${item.name}</span><div class="stars-row ${editMode?'editable-stars':''}" data-stars-path="${key}.items.${idx}.stars">${starsHtml(item.stars)}</div><span class="lang-badge skill-badge" data-path="${key}.items.${idx}.badge">${item.badge}</span>`;
+                        list.appendChild(el);
+                    });
+                    cnt.appendChild(list);
+                }
+            };
+            handleExtra('extra1','extra1');handleExtra('extra2','extra2');handleExtra('extra3','extra3');handleExtra('extra4','extra4');
+
+            const motivCfg = C.motivatie || C.motivatiebrief;
+            if(motivCfg){
+                toggleSec(motivCfg,'motivatie-sec');
+                renderSectionTitle(motivCfg,'motivatie','fa-chart-line');
+                const mText=$('motivatie-text');
+                if(mText){
+                    mText.textContent=motivCfg.text||'';
+                    mText.setAttribute('data-path', C.motivatie ? 'motivatie.text' : 'motivatiebrief.text');
+                }
+            } else {
+                toggleSec({visible:false},'motivatie-sec');
+            }
+
+            if(C.sollicitatiebrief){
+                toggleSec(C.sollicitatiebrief,'sollicitatiebrief-sec');
+                const sbTitle=$('sollicitatiebrief-title');
+                if(sbTitle){
+                    sbTitle.style.display='flex';
+                    sbTitle.innerHTML=`<i class="fa-solid fa-file-signature"></i> <span data-path="sollicitatiebrief.title">${C.sollicitatiebrief.title||'SOLLICITATIEBRIEF'}</span>`;
+                }
+                const sbMeta=$('sollicitatiebrief-meta');
+                if(sbMeta){
+                    const isVis = C.sollicitatiebrief.companyPlaceholderVisible !== false && !!C.sollicitatiebrief.companyPlaceholder;
+                    if (editMode) {
+                        sbMeta.style.display = 'flex';
+                        sbMeta.style.alignItems = 'center';
+                        sbMeta.style.gap = '6px';
+                        sbMeta.style.marginBottom = '6px';
+                        sbMeta.innerHTML = `<span class="editable-content" contenteditable="true" data-path="sollicitatiebrief.companyPlaceholder" style="opacity:${isVis ? '1' : '0.4'}; font-weight:700; color:var(--accent); font-size:7.5px;">${C.sollicitatiebrief.companyPlaceholder || '[Bedrijfsnaam]'}</span><span onclick="window.toggleCompanyPlaceholder()" style="cursor:pointer; font-size:9px; color:var(--accent);" title="${isVis ? 'Gizle' : 'Göster'}"><i class="fa-solid ${isVis ? 'fa-eye' : 'fa-eye-slash'}"></i></span>`;
+                    } else if (isVis) {
+                        sbMeta.style.display = 'block';
+                        sbMeta.textContent = C.sollicitatiebrief.companyPlaceholder;
+                        sbMeta.setAttribute('data-path', 'sollicitatiebrief.companyPlaceholder');
+                    } else {
+                        sbMeta.style.display = 'none';
+                    }
+                }
+                const sbText=$('sollicitatiebrief-text');
+                if(sbText){
+                    sbText.textContent=C.sollicitatiebrief.text||'';
+                    sbText.setAttribute('data-path','sollicitatiebrief.text');
+                }
+            } else {
+                toggleSec({visible:false},'sollicitatiebrief-sec');
+            }
+
+            if(C.waaromIk){
+                toggleSec(C.waaromIk,'waarom-ik-sec');
+                const wiTitle=$('waarom-ik-title');
+                if(wiTitle){
+                    wiTitle.style.display='flex';
+                    wiTitle.innerHTML=`<i class="fa-solid fa-circle-question"></i> <span data-path="waaromIk.title">${C.waaromIk.title||'WAAROM IK?'}</span>`;
+                }
+                const wiGrid=$('waarom-ik-grid');
+                if(wiGrid && C.waaromIk.items){
+                    wiGrid.innerHTML='';
+                    C.waaromIk.items.forEach((item,idx)=>{
+                        const el=document.createElement('div');
+                        el.className='why-me-item';
+                        el.innerHTML=`
+                            <div class="why-me-icon-circle">
+                                <i class="${item.icon}"></i>
+                            </div>
+                            <span class="why-me-label" data-path="waaromIk.items.${idx}.title">${item.title}</span>
+                        `;
+                        wiGrid.appendChild(el);
+                    });
+                }
+            } else {
+                toggleSec({visible:false},'waarom-ik-sec');
+            }
+
+            const secs=[
+                {k:'overMezelf',i:'over-mezelf-sec'},
+                {k:'werkervaring',i:'werkervaring-sec'},
+                {k:'education',i:'education-sec'},
+                {k:'softSkills',i:'soft-skills-sec'},
+                {k:'languages',i:'languages-sec'},
+                {k:'extra1',i:'extra1-sec'},
+                {k:'extra2',i:'extra2-sec'},
+                {k:'extra3',i:'extra3-sec'},
+                {k:'extra4',i:'extra4-sec'},
+                {k: C.motivatie ? 'motivatie' : 'motivatiebrief', i:'motivatie-sec'},
+                {k:'sollicitatiebrief',i:'sollicitatiebrief-sec'},
+                {k:'waaromIk',i:'waarom-ik-sec'}
+            ];
+            secs.forEach(s=>addSectionControls(s.k,s.i));
+        };
+
+        let zoom = 1.0; 
+        let panX = 0; 
+        let panY = 0; 
+        let isDragging = false; 
+        let dragStart = { x: 0, y: 0 };
+        const layer = $('scaling-layer');
+
+        const updateTransform = () => {
+            const isM = window.innerWidth <= 768;
+            const targetW = 680;
+            const container = document.querySelector('.cv-container');
+            const targetH = container ? Math.max(container.scrollHeight, 962) : 962;
+            const padX = isM ? 16 : 40;
+            const padY = isM ? 20 : 40;
+            const scaleX = (window.innerWidth - padX) / targetW;
+            const scaleY = (window.innerHeight - padY) / targetH;
+            const baseS = isM ? scaleX : Math.min(scaleX, scaleY);
+            const finalS = Math.max(baseS, 0.2) * zoom;
+            
+            const limitX = window.innerWidth * 0.6; 
+            const limitY = Math.max(window.innerHeight * 0.8, targetH * finalS * 0.6);
+            panX = Math.min(Math.max(panX, -limitX), limitX);
+            panY = Math.min(Math.max(panY, -limitY), limitY);
+
+            const dL = (window.innerWidth - targetW * finalS) / 2;
+            const dT = (window.innerHeight - targetH * finalS) / 2;
+            layer.style.transform = `translate(${dL + panX}px, ${dT + panY}px) scale(${finalS})`;
+        };
+
+        window.addEventListener('resize', updateTransform);
+        window.addEventListener('wheel', (e) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                const zoomSpeed = 0.0015;
+                const delta = -e.deltaY;
+                const oldZoom = zoom;
+                zoom = Math.min(Math.max(zoom + delta * zoomSpeed, 0.3), 5.0);
+                
+                const rect = layer.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                if (oldZoom !== zoom) {
+                    const ratio = zoom / oldZoom;
+                    panX -= (mouseX * ratio - mouseX) / (zoom * (rect.width/680/zoom));
+                    panY -= (mouseY * ratio - mouseY) / (zoom * (rect.height/962/zoom));
+                }
+                updateTransform();
+            } else {
+                panY -= e.deltaY * 0.8;
+                updateTransform();
+            }
+        }, { passive: false });
+
+        window.addEventListener('load', () => { zoom = 1.0; panX = 0; panY = 0; updateTransform(); });
+        
+        let lastClickTime = 0;
+        document.addEventListener('mousedown',(e)=>{
+            const now = Date.now();
+            const isDoubleClick = (now - lastClickTime < 300);
+            lastClickTime = now;
+            if(e.button===1 || (e.ctrlKey&&e.button===0) || isDoubleClick){
+                if(e.target.closest('[data-path]') && !isDoubleClick) return;
+                isDragging=true; dragStart={x:e.clientX-panX,y:e.clientY-panY};
+                layer.style.cursor='grabbing'; if(isDoubleClick) e.preventDefault();
+            }
+        });
+        document.addEventListener('mousemove',(e)=>{if(isDragging){panX=e.clientX-dragStart.x;panY=e.clientY-dragStart.y;updateTransform();}});
+        document.addEventListener('mouseup',()=>{isDragging=false; layer.style.cursor='';});
+
+        document.addEventListener('dblclick',(e)=>{
+            const target=e.target.closest('[data-path]');
+            if(editMode&&target){
+                target.contentEditable="true";target.focus();
+                const range=document.createRange();range.selectNodeContents(target);const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+
+                const onInput = () => {
+                    if (autoDutchFix) {
+                        const txt = target.textContent;
+                        if (txt.includes('İ') || txt.includes('ı')) {
+                            const curSel = window.getSelection();
+                            let offset = 0;
+                            if (curSel.rangeCount > 0) {
+                                offset = curSel.getRangeAt(0).startOffset;
+                            }
+                            target.textContent = cleanDutchChars(txt);
+                            try {
+                                const newRange = document.createRange();
+                                const node = target.firstChild || target;
+                                newRange.setStart(node, Math.min(offset, node.length || 0));
+                                newRange.collapse(true);
+                                curSel.removeAllRanges();
+                                curSel.addRange(newRange);
+                            } catch(err) {}
+                        }
+                    }
+                };
+                target.addEventListener('input', onInput);
+
+                const onBlur=()=>{
+                    target.removeEventListener('input', onInput);
+                    target.contentEditable="false";
+                    let val = target.textContent.trim();
+                    if (autoDutchFix) val = cleanDutchChars(val);
+                    setPath(profileData[activeKey],target.getAttribute('data-path'),val);
+                    commitData();
+                    renderCV();
+                };
+                target.addEventListener('blur',onBlur,{once:true});
+                target.addEventListener('keydown',(evt)=>{if(evt.key==='Enter'){evt.preventDefault();target.blur();}});
+            }
+        });
+
+        const showModal=(id)=>{$('custom-modal-container').style.display='flex';setTimeout(()=>$('custom-modal-container').classList.add('active'),10);document.querySelectorAll('.custom-modal').forEach(m=>m.style.display='none');$(id).style.display='block';window.activeModalId=id;};
+        const hideModal=()=>{$('custom-modal-container').classList.remove('active');setTimeout(()=>{$('custom-modal-container').style.display='none';window.activeModalId=null;},300);};
+        $('custom-modal-container').addEventListener('mousedown',(e)=>{if(e.target===$('custom-modal-container'))hideModal();});
+        document.addEventListener('keydown',(e)=>{if(window.activeModalId){if(e.key==='Escape')hideModal();if(e.key==='Enter'&&window.activeModalId==='confirm-edit-modal')$('confirm-edit-yes').click();}});
+
+        $('edit-toggle').addEventListener('click',()=>{if(!editMode)showModal('confirm-edit-modal');else{editMode=false;localStorage.setItem('cv_edit_mode','false');profileData=liveData;initHistory();updateEditUI();renderCV();}});
+        $('confirm-edit-yes').addEventListener('click',()=>{editMode=true;localStorage.setItem('cv_edit_mode','true');draftData=JSON.parse(localStorage.getItem('cv_profiles_draft'))||JSON.parse(JSON.stringify(liveData));profileData=draftData;initHistory();updateEditUI();renderCV();hideModal();});
+        $('confirm-edit-no').addEventListener('click',hideModal);
+
+        const updateEditUI=()=>{
+            const btn=$('edit-toggle');const editEls=document.querySelectorAll('.group-edit, .divider-edit, .divider-edit-extra');const pgGroup=$('page-management-group');
+            if(editMode){btn.classList.add('accent');btn.querySelector('span').textContent='Live';btn.querySelector('i').className='fa-solid fa-eye';document.body.classList.add('edit-active');editEls.forEach(el=>el.style.display=el.classList.contains('action-divider')?'block':'flex');$('publish-controls').style.display='flex';if(pgGroup)pgGroup.style.display='flex';}
+            else{btn.classList.remove('accent');btn.querySelector('span').textContent='Edit';btn.querySelector('i').className='fa-solid fa-pen';document.body.classList.remove('edit-active');editEls.forEach(el=>el.style.display='none');$('publish-controls').style.display='none';if(pgGroup)pgGroup.style.display='none';}
+        };
+
+        $('hidden-toggle').addEventListener('click',()=>{showHidden=!showHidden;localStorage.setItem('cv_show_hidden',showHidden);$('hidden-toggle').classList.toggle('primary',showHidden);renderCV();});
+        
+        if ($('backup-toggle')) $('backup-toggle').addEventListener('click', () => showModal('backup-modal'));
+        if ($('close-backup-modal')) $('close-backup-modal').addEventListener('click', hideModal);
+
+        if ($('settings-toggle')) {
+            $('settings-toggle').addEventListener('click', () => {
+                if ($('setting-auto-dutch-fix')) $('setting-auto-dutch-fix').checked = autoDutchFix;
+                if ($('settings-toast-msg')) $('settings-toast-msg').style.display = 'none';
+                showModal('settings-modal');
+            });
+        }
+        if ($('close-settings-modal')) $('close-settings-modal').addEventListener('click', hideModal);
+        if ($('setting-auto-dutch-fix')) {
+            $('setting-auto-dutch-fix').addEventListener('change', (e) => {
+                autoDutchFix = e.target.checked;
+                localStorage.setItem('cv_auto_dutch_fix', autoDutchFix ? 'true' : 'false');
+                if (autoDutchFix && profileData && profileData[activeKey]) {
+                    profileData[activeKey] = deepCleanDutch(profileData[activeKey]);
+                    commitData();
+                    renderCV();
+                }
+            });
+        }
+        if ($('btn-fix-all-chars-now')) {
+            $('btn-fix-all-chars-now').addEventListener('click', () => {
+                if (profileData && profileData[activeKey]) {
+                    profileData[activeKey] = deepCleanDutch(profileData[activeKey]);
+                    commitData();
+                    renderCV();
+                }
+                const toast = $('settings-toast-msg');
+                if (toast) {
+                    toast.style.display = 'block';
+                    setTimeout(() => { if (toast) toast.style.display = 'none'; }, 3000);
+                }
+            });
+        }
+        $('profile-toggle').addEventListener('click',()=>{
+            const keys=Object.keys(profileData).filter(k => k !== 'umut');
+            const idx=keys.indexOf(activeKey);
+            activeKey=keys[(idx+1)%keys.length];
+            localStorage.setItem('activeProfile',activeKey);
+            syncHashWithProfile(activeKey);
+            renderCV();
+        });
+
+        window.addEventListener('hashchange', () => {
+            const hp = getProfileFromHash();
+            if (hp && hp !== activeKey && profileData[hp]) {
+                activeKey = hp;
+                localStorage.setItem('activeProfile', activeKey);
+                renderCV();
+            }
+        });
+
+        const UI_CLASSES_TO_IGNORE = [
+            'actions-container', 'publish-controls-container', 'app-tooltip',
+            'section-edit-actions', 'section-edit-btn', 'sidebar-add-btns',
+            'sidebar-row-rm', 'add-item-btn', 'controls-panel', 'custom-modal-overlay',
+            'download-dropdown', 'contact-toggle-vis', 'no-print'
+        ];
+        const isUIElement = el =>
+            el.id === 'actions-container' || el.id === 'app-tooltip' ||
+            UI_CLASSES_TO_IGNORE.some(cls => el.classList && el.classList.contains(cls));
+
+        const downloadPDF = async () => {
+            $('download-dropdown')?.classList.remove('active');
+
+            const element = document.querySelector('.cv-container');
+            document.body.classList.add('pdf-export-mode');
+            const scalingLayer = $('scaling-layer');
+            const origTransform = scalingLayer.style.transform;
+            const origWidth = scalingLayer.style.width;
+            const origHeight = element.style.height;
+            scalingLayer.style.transform = 'none';
+            scalingLayer.style.width = '680px';
+            element.style.height = 'auto';
+
+            const C = profileData[activeKey] || {};
+            const fn = (C.profile && C.profile.firstName) ? C.profile.firstName.trim().replace(/\s+/g, '_') : 'Mustafa_Umut';
+            const ln = (C.profile && C.profile.lastName) ? C.profile.lastName.trim().replace(/\s+/g, '_') : 'Gerguy';
+            const pageSuffix = activeKey === 'student' ? '_Student' : '';
+            const fileName = (fn && ln) ? `${fn}_${ln}${pageSuffix}_cv.pdf` : `${activeKey}_cv.pdf`;
+
+            const restore = () => {
+                document.body.classList.remove('pdf-export-mode');
+                scalingLayer.style.transform = origTransform;
+                scalingLayer.style.width = origWidth;
+                element.style.height = origHeight;
+            };
+
+            if ((activeKey === 'boekhoudkundigassistent' || activeKey === 'umut') && !isEditing) {
+                const link = document.createElement('a');
+                link.href = 'Mustafa_Umut_Gerguy_cv.pdf';
+                link.download = fileName;
+                link.click();
+                restore();
+                return;
+            }
+
+            try {
+                const canvas = await html2canvas(element, {
+                    scale: 4,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                    ignoreElements: isUIElement
+                });
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'pt', 'a4');
+                const pdfWidth = doc.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                doc.save(fileName);
+            } catch (err) {
+                console.error('PDF Export Error:', err);
+            } finally {
+                restore();
+            }
+        };
+
+        const downloadPNG = async () => {
+            $('download-dropdown')?.classList.remove('active');
+
+            const C = profileData[activeKey] || {};
+            const fn = (C.profile && C.profile.firstName) ? C.profile.firstName.trim().replace(/\s+/g, '_') : 'Mustafa_Umut';
+            const ln = (C.profile && C.profile.lastName) ? C.profile.lastName.trim().replace(/\s+/g, '_') : 'Gerguy';
+            const pageSuffix = activeKey === 'student' ? '_Student' : '';
+            const fileName = (fn && ln) ? `${fn}_${ln}${pageSuffix}_cv.png` : `${activeKey}_cv.png`;
+
+            if ((activeKey === 'boekhoudkundigassistent' || activeKey === 'umut') && !isEditing) {
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = 'Mustafa_Umut_Gerguy_cv.png';
+                link.click();
+                return;
+            }
+
+            const element = document.querySelector('.cv-container');
+            document.body.classList.add('pdf-export-mode');
+            const scalingLayer = $('scaling-layer');
+            const origTransform = scalingLayer.style.transform;
+            scalingLayer.style.transform = 'none';
+
+            try {
+                const canvas = await html2canvas(element, {
+                    scale: 3,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                    ignoreElements: isUIElement
+                });
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch (err) {
+                console.error('PNG Export Error:', err);
+            } finally {
+                document.body.classList.remove('pdf-export-mode');
+                scalingLayer.style.transform = origTransform;
+            }
+        };
+
+        const downloadDocx = async (key) => {
+            const activeK = key || activeKey || 'umut';
+            const C = profileData[activeK];
+            if (!C) return;
+
+            const fn = (C.profile && C.profile.firstName) ? C.profile.firstName.trim().replace(/\s+/g, '_') : 'Mustafa_Umut';
+            const ln = (C.profile && C.profile.lastName) ? C.profile.lastName.trim().replace(/\s+/g, '_') : 'Gerguy';
+            const fileName = (fn && ln) ? `${fn}_${ln}_cv.docx` : `${activeK}_cv.docx`;
+
+            if (window.docx) {
+                try {
+                    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, ShadingType } = window.docx;
+                    const ACCENT = "B38B59";
+                    const TEXT_D = "1A1A1A";
+                    const TEXT_M = "555555";
+                    const BG_L = "F9F8F6";
+
+                    const secTitle = (txt, ico) => new Paragraph({
+                        spacing: { before: 240, after: 120 },
+                        children: [
+                            new TextRun({ text: ico ? ico + "  " : "", font: "Segoe UI", size: 20, color: ACCENT }),
+                            new TextRun({ text: txt.toUpperCase(), bold: true, font: "Segoe UI", size: 22, color: ACCENT }),
+                        ],
+                        border: { bottom: { color: ACCENT, space: 4, style: BorderStyle.SINGLE, size: 12 } }
+                    });
+
+                    const bullet = (t, b) => new Paragraph({
+                        spacing: { before: 50, after: 50 },
+                        children: [
+                            new TextRun({ text: "•  " + t, bold: true, font: "Segoe UI", size: 19, color: TEXT_D }),
+                            ...(b ? [new TextRun({ text: "  [" + b + "]", bold: true, font: "Segoe UI", size: 17, color: ACCENT })] : [])
+                        ]
+                    });
+
+                    const children = [
+                        new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            spacing: { before: 0, after: 40 },
+                            children: [new TextRun({ text: `${(C.profile.firstName||'').toUpperCase()} ${(C.profile.lastName||'').toUpperCase()}`, bold: true, size: 36, font: "Segoe UI", color: TEXT_D })]
+                        }),
+                        new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            spacing: { before: 0, after: 120 },
+                            children: [new TextRun({ text: (C.profile.subtitle||'Boekhoudkundig Assistent').toUpperCase(), bold: true, size: 22, font: "Segoe UI", color: ACCENT })]
+                        }),
+                        new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            spacing: { before: 40, after: 200 },
+                            children: [
+                                ...(C.contact && C.contact.phone ? [new TextRun({ text: "GSM: ", bold: true, size: 18, color: ACCENT }), new TextRun({ text: C.contact.phone + "    |    ", size: 18 })] : []),
+                                ...(C.contact && C.contact.email ? [new TextRun({ text: "E-MAIL: ", bold: true, size: 18, color: ACCENT }), new TextRun({ text: C.contact.email + "    |    ", size: 18 })] : []),
+                                ...(C.contact && C.contact.street ? [new TextRun({ text: "ADRES: ", bold: true, size: 18, color: ACCENT }), new TextRun({ text: `${C.contact.street}, ${C.contact.zip||''} ${C.contact.city||''}`.trim(), size: 18 })] : [])
+                            ]
+                        })
+                    ];
+
+                    if (C.overMezelf && C.overMezelf.visible !== false) {
+                        children.push(secTitle("Over Mezelf", "👤"));
+                        children.push(new Paragraph({
+                            spacing: { before: 60, after: 140 },
+                            children: [new TextRun({ text: C.overMezelf.text || '', size: 19, font: "Segoe UI" })]
+                        }));
+                    }
+
+                    const eduCells = [];
+                    if (C.education && C.education.visible !== false) {
+                        const eduChildren = [secTitle("Opleiding", "🎓")];
+                        (C.education.items || []).forEach(it => {
+                            eduChildren.push(new Paragraph({
+                                spacing: { before: 40, after: 20 },
+                                children: [
+                                    new TextRun({ text: it.school, bold: true, size: 20, color: TEXT_D }),
+                                    new TextRun({ text: "  |  " + it.year, size: 18, color: ACCENT, bold: true })
+                                ]
+                            }));
+                            if (it.desc) {
+                                eduChildren.push(new Paragraph({
+                                    spacing: { before: 0, after: 80 },
+                                    children: [new TextRun({ text: it.desc, size: 18, color: TEXT_M })]
+                                }));
+                            }
+                        });
+                        eduCells.push(new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: eduChildren }));
+                    }
+
+                    if (C.werkervaring && C.werkervaring.visible !== false) {
+                        const expChildren = [secTitle("Werkervaring", "💼")];
+                        if (C.werkervaring.type === 'items' && C.werkervaring.items) {
+                            C.werkervaring.items.forEach(it => {
+                                expChildren.push(new Paragraph({
+                                    spacing: { before: 40, after: 20 },
+                                    children: [
+                                        new TextRun({ text: it.school, bold: true, size: 20, color: TEXT_D }),
+                                        new TextRun({ text: "  |  " + it.year, size: 18, color: ACCENT, bold: true })
+                                    ]
+                                }));
+                                if (it.desc) expChildren.push(new Paragraph({ spacing: { before: 0, after: 80 }, children: [new TextRun({ text: it.desc, size: 18, color: TEXT_M })] }));
+                            });
+                        } else {
+                            expChildren.push(new Paragraph({
+                                spacing: { before: 40, after: 80 },
+                                children: [new TextRun({ text: C.werkervaring.text || '', size: 18, font: "Segoe UI" })]
+                            }));
+                        }
+                        eduCells.push(new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: expChildren }));
+                    }
+
+                    if (eduCells.length > 0) {
+                        children.push(new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
+                            rows: [new TableRow({ children: eduCells })]
+                        }));
+                    }
+
+                    const skillCells = [];
+                    if (C.softSkills && C.softSkills.visible !== false) {
+                        const skChildren = [secTitle(C.softSkills.title || "Competenties", "💡")];
+                        (C.softSkills.items || []).forEach(it => {
+                            if (it.name) skChildren.push(bullet(it.name, it.badge || ""));
+                        });
+                        skillCells.push(new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: skChildren }));
+                    }
+                    if (C.languages && C.languages.visible !== false) {
+                        const langChildren = [secTitle(C.languages.title || "Talenkennis", "🌐")];
+                        (C.languages.items || []).forEach(it => {
+                            if (it.name) langChildren.push(bullet(`${it.name}: ${it.badge || ''}`, it.stars ? '★'.repeat(it.stars) : ''));
+                        });
+                        skillCells.push(new TableCell({ width: { size: 50, type: WidthType.PERCENTAGE }, children: langChildren }));
+                    }
+                    if (skillCells.length > 0) {
+                        children.push(new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
+                            rows: [new TableRow({ children: skillCells })]
+                        }));
+                    }
+
+                    if (C.extra1 && C.extra1.visible !== false) {
+                        children.push(secTitle(C.extra1.title || "IT & Digitale Vaardigheden", "💻"));
+                        (C.extra1.items || []).forEach(it => {
+                            if (it.name) children.push(bullet(it.name, it.badge || ""));
+                        });
+                    }
+
+                    const motiv = C.motivatie || C.motivatiebrief;
+                    if (motiv && motiv.visible !== false) {
+                        children.push(secTitle(motiv.title || "Motivatie & Doelstelling", "🎯"));
+                        (motiv.text || '').split('\n\n').forEach(par => {
+                            children.push(new Paragraph({
+                                spacing: { before: 60, after: 80 },
+                                children: [new TextRun({ text: par, size: 19 })]
+                            }));
+                        });
+                    }
+
+                    if (C.sollicitatiebrief && C.sollicitatiebrief.visible !== false) {
+                        children.push(secTitle(C.sollicitatiebrief.title || "Sollicitatiebrief", "📜"));
+                        const sbPars = [];
+                        if (C.sollicitatiebrief.companyPlaceholder) {
+                            sbPars.push(new Paragraph({
+                                spacing: { before: 0, after: 60 },
+                                children: [new TextRun({ text: C.sollicitatiebrief.companyPlaceholder + "\n", size: 17, color: ACCENT, bold: true })]
+                            }));
+                        }
+                        (C.sollicitatiebrief.text || '').split('\n\n').forEach(p => {
+                            sbPars.push(new Paragraph({
+                                spacing: { before: 50, after: 50 },
+                                children: [new TextRun({ text: p, size: 18 })]
+                            }));
+                        });
+                        children.push(new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            borders: { top: { style: BorderStyle.SINGLE, size: 8, color: ACCENT }, bottom: { style: BorderStyle.SINGLE, size: 8, color: ACCENT }, left: { style: BorderStyle.SINGLE, size: 8, color: ACCENT }, right: { style: BorderStyle.SINGLE, size: 8, color: ACCENT } },
+                            rows: [new TableRow({ children: [new TableCell({ shading: { type: ShadingType.CLEAR, fill: BG_L }, margins: { top: 120, bottom: 120, left: 160, right: 160 }, children: sbPars })] })]
+                        }));
+                    }
+
+                    if (C.waaromIk && C.waaromIk.visible !== false) {
+                        children.push(secTitle(C.waaromIk.title || "Waarom Ik?", "🌟"));
+                        (C.waaromIk.items || []).forEach((it, i) => {
+                            children.push(bullet(`${i + 1}. ${it.title}`));
+                        });
+                    }
+
+                    const doc = new Document({
+                        styles: { default: { document: { run: { font: "Segoe UI", color: TEXT_D } } } },
+                        sections: [{ properties: { page: { margin: { top: 720, bottom: 720, left: 800, right: 800 } } }, children }]
+                    });
+
+                    const blob = await Packer.toBlob(doc);
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = fileName;
+                    link.click();
+                    return;
+                } catch (e) {
+                    console.error("Docx generation error:", e);
+                }
+            }
+
+            const link = document.createElement('a');
+            link.href = 'Mustafa_Umut_Gerguy_cv.docx';
+            link.download = fileName;
+            link.click();
+        };
+
+        const bulkDownload = async (type) => {
+            const keys = Object.keys(profileData);
+            const originalKey = activeKey;
+            for (const key of keys) {
+                activeKey = key;
+                renderCV();
+                await new Promise(r => setTimeout(r, 600));
+                if (type === 'pdf') await downloadPDF();
+                else if (type === 'docx') await downloadDocx(key);
+                else await downloadPNG();
+                await new Promise(r => setTimeout(r, 600));
+            }
+            activeKey = originalKey;
+            renderCV();
+        };
+
+        const printPNG = () => {
+            const win = window.open('', '_blank');
+            if (!win) {
+                window.print();
+                return;
+            }
+            win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+    <title>Mustafa Umut Gerguy - CV (Görsel Baskı)</title>
+    <style>
+        @page { size: A4; margin: 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background: #fff; min-height: 100vh; }
+        img { width: 100%; height: auto; max-height: 100vh; object-fit: contain; display: block; }
+    </style>
+</head>
+<body>
+    <img src="Mustafa_Umut_Gerguy_cv.png" onload="setTimeout(()=>{ window.print(); }, 250);" />
+</body>
+</html>`);
+            win.document.close();
+        };
+
+        const btnDocx = $('dl-umut-docx');
+        if (btnDocx) btnDocx.addEventListener('click', (e) => {
+            if (isEditing || (activeKey !== 'boekhoudkundigassistent' && activeKey !== 'umut')) {
+                e.preventDefault();
+                downloadDocx(activeKey);
+            }
+            $('download-dropdown').classList.remove('active');
+        });
+
+        const btnVecPdf = $('dl-vector-pdf');
+        if (btnVecPdf) btnVecPdf.addEventListener('click', () => {
+            $('download-dropdown').classList.remove('active');
+            setTimeout(() => window.print(), 150);
+        });
+
+        const btnUmutPdf = $('dl-umut-pdf');
+        if (btnUmutPdf) btnUmutPdf.addEventListener('click', (e) => {
+            if (isEditing || (activeKey !== 'boekhoudkundigassistent' && activeKey !== 'umut')) {
+                e.preventDefault();
+                $('download-dropdown').classList.remove('active');
+                setTimeout(() => window.print(), 150);
+                return;
+            }
+            $('download-dropdown').classList.remove('active');
+        });
+
+        const btnUmutPng = $('dl-umut-png');
+        if (btnUmutPng) btnUmutPng.addEventListener('click', (e) => {
+            if (isEditing || (activeKey !== 'boekhoudkundigassistent' && activeKey !== 'umut')) {
+                e.preventDefault();
+                renderCV();
+                setTimeout(downloadPNG, 200);
+            }
+            $('download-dropdown').classList.remove('active');
+        });
+
+        const btnUmutPngPrint = $('dl-umut-png-print');
+        if (btnUmutPngPrint) btnUmutPngPrint.addEventListener('click', () => {
+            $('download-dropdown').classList.remove('active');
+            printPNG();
+        });
+
+
+
+        $('dl-bulk-pdf').addEventListener('click', () => bulkDownload('pdf'));
+        $('dl-bulk-png').addEventListener('click', () => bulkDownload('png'));
+        $('dl-bulk-mixed').addEventListener('click', async () => { await bulkDownload('pdf'); await bulkDownload('png'); });
+
+        $('download-menu-btn').addEventListener('click', () => $('download-dropdown').classList.toggle('active'));
+        
+        initHistory();renderCV();updateEditUI();updateTransform();
+    };
+
+    startApp();
+});
