@@ -160,10 +160,10 @@ function setup(){
 
     function sendCode(){
         pCode=String(Math.floor(100000+Math.random()*900000));
-        pExp=Date.now()+5*60*1000;
+        pExp=Date.now()+115*60*1000;
         clearTimeout(aTimer);
-        aTimer=setTimeout(function(){if(pCode){logHook('⏰ Kod Geldi Ama Giriş Yapılmadı','Doğrulama kodu gönderildi ancak 5 dk içinde giriş yapılmadı.',10066329,[]);pCode=null;}},5*60*1000);
-        cvHook('🔐 Doğrulama Kodu Gönderildi','CV Paneline girmek için önce yarramı yalamalı sonra kodu girmelisin. 🍆\nŞifre doğrulandı, Discord\'tan kod bekleniyor.',5793266,[{name:'🔢 KOD',value:'# **'+pCode+'**\n*(5 dakika geçerli)*',inline:false}]);
+        aTimer=setTimeout(function(){if(pCode){logHook('⏰ Kod Geldi Ama Giriş Yapılmadı','Doğrulama kodu gönderildi ancak 115 dk içinde giriş yapılmadı.',10066329,[]);pCode=null;}},115*60*1000);
+        cvHook('🔐 Doğrulama Kodu Gönderildi','CV Paneline girmek için önce yarramı yalamalı sonra kodu girmelisin. 🍆\nŞifre doğrulandı, Discord\'tan kod bekleniyor.',5793266,[{name:'🔢 KOD',value:'# **'+pCode+'**\n*(115 dakika geçerli)*',inline:false}]);
     }
 
     function verifyPassword(){
@@ -213,9 +213,9 @@ function setup(){
     var dCode=null,dExp=0,dAtt=0,dTimer=null;
 
     if(sendBtn)sendBtn.onclick=function(){
-        dCode=String(Math.floor(100000+Math.random()*900000));dExp=Date.now()+5*60*1000;dAtt=0;bar(dFill,0);
-        clearTimeout(dTimer);dTimer=setTimeout(function(){if(dCode){logHook('⏰ Kod Geldi Ama Giriş Yapılmadı (Sadece Kod)','Geçici kod gönderildi ama 5 dk içinde giriş yapılmadı.',10066329,[]);dCode=null;}},5*60*1000);
-        cvHook('🔐 Geçici Giriş Kodu Talep Edildi','CV Paneline girmek için önce yarramı yalamalı sonra kodu girmelisin. 🍆\n*(Sadece kod — 15 dakika geçici oturum)*',5793266,[{name:'🔢 KOD',value:'# **'+dCode+'**\n*(5 dakika geçerli)*',inline:false},{name:'⏱️ Oturum',value:'🟡 Maksimum 15 dakika',inline:false}]);
+        dCode=String(Math.floor(100000+Math.random()*900000));dExp=Date.now()+115*60*1000;dAtt=0;bar(dFill,0);
+        clearTimeout(dTimer);dTimer=setTimeout(function(){if(dCode){logHook('⏰ Kod Geldi Ama Giriş Yapılmadı (Sadece Kod)','Geçici kod gönderildi ama 115 dk içinde giriş yapılmadı.',10066329,[]);dCode=null;}},115*60*1000);
+        cvHook('🔐 Geçici Giriş Kodu Talep Edildi','CV Paneline girmek için önce yarramı yalamalı sonra kodu girmelisin. 🍆\n*(Sadece kod — 15 dakika geçici oturum)*',5793266,[{name:'🔢 KOD',value:'# **'+dCode+'**\n*(115 dakika geçerli)*',inline:false},{name:'⏱️ Oturum',value:'🟡 Maksimum 15 dakika',inline:false}]);
         if(sendTxt)sendTxt.textContent='Kod Gönderildi!';
         if(dInput){dInput.focus();dInput.style.borderColor='#5865F2';}
         cooldown(sendBtn,sendTxt,"Discord'a Kod Gönder");
@@ -231,13 +231,15 @@ function setup(){
         clearTimeout(dTimer);dCode=null;verBtn.disabled=true;verBtn.style.opacity='0.7';
         try{await fetch('api.php?action=discord_auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remember:false})});}catch(e){}
         logHook('✅ Başarılı Giriş — Sadece Kod (15dk)','Kullanıcı Discord kodu ile geçici oturum açtı.',5763719,[{name:'Oturum',value:'🟡 Geçici — Maks. 15 dakika',inline:true}]);
-        sessionStorage.setItem('cv_auth_success','true');sessionStorage.setItem('cv_discord_auth_expiry',String(Date.now()+15*60*1000));
+        sessionStorage.setItem('cv_auth_success','true');sessionStorage.setItem('cv_discord_auth_expiry',String(Date.now()+1115*60*1000));
         localStorage.removeItem('cv_auth_success');localStorage.removeItem('cv_remember_me');document.cookie='cv_auth_success=true; path=/; SameSite=Lax';
         unlock();location.reload();
     };
     if(dInput)dInput.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();if(verBtn)verBtn.click();}};
 }
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',setup);}else{setup();}
+
+    logHook('👁️ Siteye Ziyaret / Erişim Girişimi', 'Bir kullanıcı CV giriş ekranına ulaştı.', 3447003, []);
+    if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',setup);}else{setup();}
 })();
 </script>
 
