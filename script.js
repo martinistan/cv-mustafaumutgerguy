@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof CV_CONFIG === 'undefined') return;
     const $ = id => document.getElementById(id);
 
-    // ─── LOGOUT (tanımla — startApp beklenmez) ───────────────────────────────
     window.performLogout = async (skipConfirm) => {
         if (!skipConfirm && !confirm('Oturumu kapatmak istediğinize emin misiniz?\n\nYeniden giriş yapmak için şifre veya Discord 2FA kodu gerekecek.')) return;
 
@@ -27,7 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { location.reload(); }, 1200);
     };
 
-    // ─── DİSCORD 2FA 15 DAKİKA OTOMATİK ÇIKIŞ ───────────────────────────────
     (function checkDiscordSessionExpiry() {
         var expiry = sessionStorage.getItem('cv_discord_auth_expiry');
         if (!expiry) return;
@@ -44,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, remaining);
     })();
-    // ─────────────────────────────────────────────────────────────────────────
 
     const startApp = () => {
         const getProfileFromHash = () => {
@@ -914,12 +911,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // ==========================================================================
         // ICON PICKER MODAL (1400+ ICONS)
-        // ==========================================================================
-        // ==========================================================================
         // ICON PICKER MODAL (1400+ ICONS) & INSPECTOR / QUICK COPY
-        // ==========================================================================
         let activeEditingIconPath = null;
         let selectedIconCat = 'all';
         window.currentInspectedIconCls = 'fa-solid fa-star';
@@ -1288,9 +1281,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         $('hidden-toggle').addEventListener('click',()=>{showHidden=!showHidden;localStorage.setItem('cv_show_hidden',showHidden);$('hidden-toggle').classList.toggle('primary',showHidden);renderCV();});
         
-        // ==========================================
         // COOKIE & LOCAL BACKUP SYSTEM
-        // ==========================================
         const setCookie = (name, value, days = 365) => {
             let expires = "";
             if (days) {
@@ -2061,9 +2052,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initHistory();renderCV();updateEditUI();updateTransform();
     };
 
-    // ==========================================================================
     // SECURE AUTHENTICATION GATEKEEPER (!Eymen2017.)
-    // ==========================================================================
     const isAuthorized = () => {
         const p = new URLSearchParams(window.location.search);
         if (p.get('headless') === '1') return true;
