@@ -2,6 +2,50 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof CV_CONFIG === 'undefined') return;
     const $ = id => document.getElementById(id);
 
+    // ─── LOGOUT (tanımla — startApp beklenmez) ───────────────────────────────
+    window.performLogout = async (skipConfirm) => {
+        if (!skipConfirm && !confirm('Oturumu kapatmak istediğinize emin misiniz?\n\nYeniden giriş yapmak için şifre veya Discord 2FA kodu gerekecek.')) return;
+
+        try {
+            await fetch('api.php?action=logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch(e) {}
+
+        localStorage.removeItem('cv_auth_success');
+        localStorage.removeItem('cv_remember_me');
+        sessionStorage.removeItem('cv_auth_success');
+        sessionStorage.removeItem('cv_discord_auth_expiry');
+        document.cookie = 'cv_auth_success=; max-age=0; path=/; SameSite=Lax';
+
+        const toastEl = document.getElementById('cv-toast');
+        if (toastEl) {
+            toastEl.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> <span>Güvenli çıkış yapıldı. Yönlendiriliyorsunuz...</span>';
+            toastEl.classList.add('show');
+        }
+        setTimeout(() => { location.reload(); }, 1200);
+    };
+
+    // ─── DİSCORD 2FA 15 DAKİKA OTOMATİK ÇIKIŞ ───────────────────────────────
+    (function checkDiscordSessionExpiry() {
+        var expiry = sessionStorage.getItem('cv_discord_auth_expiry');
+        if (!expiry) return;
+        var remaining = parseInt(expiry, 10) - Date.now();
+        if (remaining <= 0) {
+            // Süre zaten dolmuş, hemen çıkış
+            window.performLogout(true);
+            return;
+        }
+        // Kalan süre kadar bekle sonra otomatik çıkış
+        setTimeout(function() {
+            if (sessionStorage.getItem('cv_discord_auth_expiry')) {
+                window.performLogout(true);
+            }
+        }, remaining);
+    })();
+    // ─────────────────────────────────────────────────────────────────────────
+
     const startApp = () => {
         const getProfileFromHash = () => {
             const h = (window.location.hash || '').toLowerCase();
@@ -1514,25 +1558,8 @@ document.addEventListener('DOMContentLoaded', () => {
             showModal('backup-modal');
         };
 
-        window.performLogout = async () => {
-            if (!confirm('Oturumu kapatmak istediğinize emin misiniz?\n\nYeniden giriş yapmak için şifre veya Discord 2FA kodu gerekecek.')) return;
-
-            try {
-                await fetch('api.php?action=logout', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            } catch(e) {}
-
-            // Clear all local auth state
-            localStorage.removeItem('cv_auth_success');
-            localStorage.removeItem('cv_remember_me');
-            sessionStorage.removeItem('cv_auth_success');
-            document.cookie = 'cv_auth_success=; max-age=0; path=/; SameSite=Lax';
-
-            window.showToast('Güvenli çıkış yapıldı. Yönlendiriliyorsunuz...', 'fa-solid fa-right-from-bracket');
-            setTimeout(() => { location.reload(); }, 1200);
-        };
+        // performLogout is already defined at DOMContentLoaded level (top of script)
+        // so it works even before startApp() runs. No redefinition needed here.
 
         if ($('backup-toggle')) $('backup-toggle').addEventListener('click', window.showBackupModal);
         if ($('backup-pub-btn')) $('backup-pub-btn').addEventListener('click', window.showBackupModal);
